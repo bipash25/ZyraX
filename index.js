@@ -1,29 +1,26 @@
 const { Telegraf } = require('telegraf');
 const config = require('./config');
-
-// Importing modules
-const moderation = require('./modules/moderation');
-const fun = require('./modules/fun');
-const customCommands = require('./modules/customCommands');
-const logging = require('./modules/logging');
+const loadModules = require('./loader');
 
 const bot = new Telegraf(config.BOT_TOKEN);
 
-// Basic start command
+// Basic commands for PM and group
 bot.start((ctx) => ctx.reply('Welcome to ZyraX - The Ultimate Telegram Bot!'));
+bot.command('help', (ctx) => {
+  // This can be enhanced later to show a dynamic menu.
+  ctx.reply('Help: Use /info, /ping, /id, /rules, and many more commands. For full details, visit our docs.');
+});
+bot.command('ping', (ctx) => ctx.reply('Pong!'));
 
-// Load core modules
-moderation(bot);
-fun(bot);
-customCommands(bot);
-logging(bot);
+// Load all modules dynamically
+loadModules(bot);
 
 // Global error handling
 bot.catch((err, ctx) => {
-  console.error(`Error encountered for ${ctx.updateType}`, err);
+  console.error(`Error for ${ctx.updateType}:`, err);
 });
 
-// Launch the bot
+// Start the bot
 bot.launch().then(() => {
-  console.log('ZyraX is up and running!');
+  console.log('ZyraX is live!');
 });
