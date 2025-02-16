@@ -4,13 +4,12 @@ const path = require('path');
 function loadModules(bot, dir = path.join(__dirname, 'modules')) {
   fs.readdirSync(dir).forEach((fileOrDir) => {
     const fullPath = path.join(dir, fileOrDir);
-    const stat = fs.statSync(fullPath);
-    if (stat.isDirectory()) {
-      loadModules(bot, fullPath);  // Recursively load subfolders
+    if (fs.statSync(fullPath).isDirectory()) {
+      loadModules(bot, fullPath);
     } else if (fileOrDir.endsWith('.js')) {
-      const commandModule = require(fullPath);
-      if (typeof commandModule === 'function') {
-        commandModule(bot);
+      const moduleFn = require(fullPath);
+      if (typeof moduleFn === 'function') {
+        moduleFn(bot);
         console.log(`Loaded module: ${fullPath}`);
       }
     }

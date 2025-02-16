@@ -1,4 +1,8 @@
+require('dotenv').config();
+
 module.exports = {
-  BOT_TOKEN: process.env.BOT_TOKEN || '7634351009:AAHb0z5Ww3yKUhSdYPmnUp8F_a-CX-NJzNs',
-  LOG_CHANNEL_ID: process.env.LOG_CHANNEL_ID || '-4732625332'
+  BOT_TOKEN: process.env.BOT_TOKEN,
+  // Log channel: if not set, logging commands will simply do nothing.
+  LOG_CHANNEL_ID: process.env.LOG_CHANNEL_ID,
+  WAPI_KEY: process.env.WEATHER_API_KEY
 };
