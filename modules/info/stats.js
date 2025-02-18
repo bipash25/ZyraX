@@ -1,7 +1,5 @@
-// modules/info/stats.js
 let commandCount = 0;
-module.exports = (bot) => {
-  // Increment command count for every command (example)
+exports.init = (bot) => {
   bot.use((ctx, next) => {
     if (ctx.message && ctx.message.text && ctx.message.text.startsWith('/')) {
       commandCount++;
@@ -13,3 +11,7 @@ module.exports = (bot) => {
     ctx.reply(`Total commands processed: ${commandCount}`);
   });
 };
+
+exports.help = [
+  { name: '/stats', description: 'Show bot command statistics.', category: 'INFO' }
+];

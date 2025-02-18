@@ -1,21 +1,32 @@
-// modules/fun/trivia.js
 const triviaQuestions = [
-    { q: 'What is the capital of France?', a: 'Paris' },
-    { q: 'What is 2+2?', a: '4' }
-  ];
-  
-  module.exports = (bot) => {
-    bot.command('trivia', (ctx) => {
-      const question = triviaQuestions[Math.floor(Math.random() * triviaQuestions.length)];
-      ctx.reply(`Trivia: ${question.q}\nReply with your answer!`);
-      // For simplicity, we wait for the next message as answer.
-      bot.once('text', (answerCtx) => {
-        if (answerCtx.message.text.trim().toLowerCase() === question.a.toLowerCase()) {
-          answerCtx.reply('Correct!');
-        } else {
-          answerCtx.reply(`Wrong. The answer is ${question.a}.`);
-        }
-      });
-    });
-  };
-  
+  { q: 'What is the capital of France?', a: 'Paris' },
+  { q: 'What is 2+2?', a: '4' },
+  { q: 'Who wrote "Hamlet"?', a: 'Shakespeare' }
+];
+
+exports.init = (bot) => {
+  bot.command('trivia', (ctx) => {
+    const question = triviaQuestions[Math.floor(Math.random() * triviaQuestions.length)];
+    ctx.session = ctx.session || {};
+    ctx.session.trivia = question;
+    ctx.reply(`Trivia: ${question.q}\nReply with your answer.`);
+  });
+
+  bot.on('text', async (ctx, next) => {
+    if (ctx.session && ctx.session.trivia) {
+      const correctAnswer = ctx.session.trivia.a;
+      if (ctx.message.text.trim().toLowerCase() === correctAnswer.toLowerCase()) {
+        await ctx.reply('🎉 Correct!');
+      } else {
+        await ctx.reply(`❌ Wrong. The answer is ${correctAnswer}.`);
+      }
+      ctx.session.trivia = null;
+    } else {
+      return next();
+    }
+  });
+};
+
+exports.help = [
+  { name: '/trivia', description: 'Start a trivia game.', category: 'FUN' }
+];

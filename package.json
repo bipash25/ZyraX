@@ -1,14 +1,16 @@
 {
   "name": "zyrax",
   "version": "1.0.0",
-  "description": "ZyraX - The Ultimate Telegram Bot (MVP Phase)",
+  "description": "ZyraX - The Ultimate Telegram Bot (Phase 1)",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
     "axios": "^0.27.2",
-    "dotenv": "^16.4.7",
+    "chalk": "^5.0.0",
+    "dotenv": "^16.0.0",
+    "mongoose": "^6.0.0",
     "telegraf": "^4.12.0"
   }
 }

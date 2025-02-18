@@ -1,8 +1,12 @@
-// modules/chat/deletecmd.js
-module.exports = (bot) => {
-    bot.command('deletecmd', (ctx) => {
-      // Simply delete the triggering message.
-      ctx.deleteMessage().catch(() => ctx.reply('Unable to delete command message.'));
+exports.init = (bot) => {
+  bot.command('deletecmd', (ctx) => {
+    ctx.deleteMessage().catch((error) => {
+      console.error('Deletecmd error:', error);
+      ctx.reply('Unable to delete command message.');
     });
-  };
-  
+  });
+};
+
+exports.help = [
+  { name: '/deletecmd', description: 'Delete the command message.', category: 'CHAT' }
+];
