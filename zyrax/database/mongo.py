@@ -284,4 +284,42 @@ class MongoDB:
         )
         return True
 
+    # Stats Tracking
+    async def register_user(self, user_id: int, username: str = None):
+        users = await self.get_collection("users")
+        await users.update_one(
+            {"user_id": user_id},
+            {"$set": {"username": username, "last_seen": time.time()}},
+            upsert=True
+        )
+
+    async def register_chat(self, chat_id: int, title: str = None):
+        chats = await self.get_collection("chats")
+        await chats.update_one(
+            {"chat_id": chat_id},
+            {"$set": {"title": title, "last_active": time.time()}},
+            upsert=True
+        )
+
+    async def get_stats(self):
+        users = await self.get_collection("users")
+        chats = await self.get_collection("chats")
+        
+        user_count = await users.count_documents({})
+        chat_count = await chats.count_documents({})
+        
+        # Get today's commands from Redis
+        today = time.strftime("%Y-%m-%d")
+        cmd_count = await self.redis.get(f"stats:commands:{today}")
+        
+        return {
+            "users": user_count,
+            "chats": chat_count,
+            "commands_today": int(cmd_count) if cmd_count else 0
+        }
+
+    async def track_command_usage(self):
+        today = time.strftime("%Y-%m-%d")
+        await self.redis.incr(f"stats:commands:{today}")
+
 db = MongoDB()

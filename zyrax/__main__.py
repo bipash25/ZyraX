@@ -1,9 +1,15 @@
 import asyncio
+import uvicorn
 from pyrogram import Client, idle
 from zyrax.config import Config
 from zyrax.modules import load_modules
-from aiohttp import web
 from zyrax.utils.logger import logger
+from zyrax.dashboard import app as dashboard_app
+
+async def start_dashboard():
+    config = uvicorn.Config(dashboard_app, host="0.0.0.0", port=8080, log_level="info")
+    server = uvicorn.Server(config)
+    await server.serve()
 
 async def main():
     # Load all modules dynamically before starting client
@@ -21,40 +27,22 @@ async def main():
         plugins=dict(root="zyrax.modules")
     )
     
-    # Start the Bridge Web Server
-    # We define a simple handler here that uses 'app' to send messages
-    async def handle_webhook(request):
-        chat_id = request.match_info.get('chat_id')
-        try:
-            data = await request.json()
-            text = data.get("text")
-            if chat_id and text:
-                # Resolve chat_id - try integer conversion
-                try:
-                    chat_id_int = int(chat_id)
-                except ValueError:
-                    chat_id_int = chat_id # Use username or string
-                
-                await app.send_message(chat_id_int, f"[Webhook]: {text}")
-                logger.info(f"Webhook sent message to {chat_id}")
-                return web.Response(text="Sent")
-        except Exception as e:
-            logger.error(f"Webhook error: {e}")
-            return web.Response(text=str(e), status=500)
-        return web.Response(text="Invalid Request", status=400)
+    # Inject bot instance into dashboard state
+    dashboard_app.state.bot = app
 
-    server = web.Application()
-    server.add_routes([web.post('/webhook/{chat_id}', handle_webhook)])
-    runner = web.AppRunner(server)
-    await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', 8080)
-    await site.start()
-    logger.info("Bridge Server running on 0.0.0.0:8080")
-
+    # Start Bot
     await app.start()
     logger.info("ZyraX started successfully!")
+    
+    # Start Dashboard (concurrently)
+    # We use asyncio.create_task to run uvicorn in background
+    dashboard_task = asyncio.create_task(start_dashboard())
+    logger.info("Dashboard running on 0.0.0.0:8080")
+    
     await idle()
     await app.stop()
+    # Cancel dashboard task on shutdown
+    dashboard_task.cancel()
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -7,3 +7,8 @@ cachetools
 aiohttp
 redis
 pydantic
+fastapi
+uvicorn
+jinja2
+python-multipart
+aiofiles

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
+        <h3 class="text-gray-400 text-sm">Total Users</h3>
+        <p class="text-3xl font-bold mt-2">{{ stats.users }}</p>
+    </div>
+    <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
+        <h3 class="text-gray-400 text-sm">Active Chats</h3>
+        <p class="text-3xl font-bold text-green-400 mt-2">{{ stats.chats }}</p>
+    </div>
+    <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
+        <h3 class="text-gray-400 text-sm">Commands Today</h3>
+        <p class="text-3xl font-bold text-purple-400 mt-2">{{ stats.commands_today }}</p>
+    </div>
+</div>
+
+<div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
+    <h2 class="text-xl font-bold mb-4">Welcome to ZyraX Dashboard</h2>
+    <p class="text-gray-300">
+        This is the control center for your Telegram bot. View real-time statistics,
+        manage premium subscriptions, and configure bot settings.
+    </p>
+</div>
+{% endblock %}
