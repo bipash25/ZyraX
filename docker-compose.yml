@@ -9,8 +9,10 @@ services:
       - .env
     depends_on:
       - mongo
+      - redis
     environment:
       - MONGO_URL=mongodb://mongo:27017
+      - REDIS_URL=redis://redis:6379
 
   mongo:
     image: mongo:latest
@@ -19,5 +21,13 @@ services:
     volumes:
       - mongo_data:/data/db
 
+  redis:
+    image: redis:7-alpine
+    container_name: zyrax_redis
+    restart: always
+    volumes:
+      - redis_data:/data
+
 volumes:
   mongo_data:
+  redis_data:

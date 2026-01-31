@@ -1,6 +1,7 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from zyrax.utils.decorators import require_admin
+from zyrax.utils.errors import error_handler
 
 __mod_name__ = "Admin"
 __help__ = """
@@ -10,6 +11,7 @@ __help__ = """
 """
 
 @Client.on_message(filters.command("promote") & filters.group)
+@error_handler
 @require_admin()
 async def promote(client: Client, message: Message):
     if not message.reply_to_message:
@@ -31,6 +33,7 @@ async def promote(client: Client, message: Message):
         await message.reply_text(f"Failed to promote: {str(e)}")
 
 @Client.on_message(filters.command("demote") & filters.group)
+@error_handler
 @require_admin()
 async def demote(client: Client, message: Message):
     if not message.reply_to_message:

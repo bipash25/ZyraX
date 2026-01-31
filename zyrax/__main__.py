@@ -3,10 +3,15 @@ from pyrogram import Client, idle
 from zyrax.config import Config
 from zyrax.modules import load_modules
 from aiohttp import web
+from zyrax.utils.logger import logger
 
 async def main():
     # Load all modules dynamically before starting client
     load_modules()
+    
+    # Initialize Database (Indexes & Cache)
+    from zyrax.database.mongo import db
+    await db.initialize()
     
     app = Client(
         "ZyraX",
@@ -31,8 +36,10 @@ async def main():
                     chat_id_int = chat_id # Use username or string
                 
                 await app.send_message(chat_id_int, f"[Webhook]: {text}")
+                logger.info(f"Webhook sent message to {chat_id}")
                 return web.Response(text="Sent")
         except Exception as e:
+            logger.error(f"Webhook error: {e}")
             return web.Response(text=str(e), status=500)
         return web.Response(text="Invalid Request", status=400)
 
@@ -42,10 +49,10 @@ async def main():
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', 8080)
     await site.start()
-    print("Bridge Server running on 0.0.0.0:8080")
+    logger.info("Bridge Server running on 0.0.0.0:8080")
 
     await app.start()
-    print("ZyraX started successfully!")
+    logger.info("ZyraX started successfully!")
     await idle()
     await app.stop()
 

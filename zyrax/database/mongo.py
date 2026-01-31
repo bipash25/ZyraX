@@ -1,11 +1,36 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 import time
+import redis.asyncio as redis
+from pydantic import BaseModel, Field
+from typing import List, Optional
 from zyrax.config import Config
+from zyrax.database.cache import Cache
+
+class WarnDocument(BaseModel):
+    user_id: int
+    chat_id: int
+    count: int = Field(default=0, ge=0)
+    warns: List[dict] = []
+
+class FederationDocument(BaseModel):
+    fed_id: str
+    name: str = Field(min_length=3)
+    owner_id: int
+    chats: List[int] = []
 
 class MongoDB:
     def __init__(self):
         self.client = AsyncIOMotorClient(Config.MONGO_URL)
         self.db = self.client.zyrax
+        self.redis = redis.from_url(Config.REDIS_URL, decode_responses=True)
+        self.cache = Cache(self.redis)
+
+    async def initialize(self):
+        # Create Indexes
+        await self.db.warnings.create_index([("user_id", 1), ("chat_id", 1)], unique=True)
+        await self.db.fed_bans.create_index([("fed_id", 1), ("user_id", 1)], unique=True)
+        await self.db.federations.create_index("fed_id", unique=True)
+        print("Database indexes created.")
 
     async def get_collection(self, name):
         return self.db[name]
@@ -50,13 +75,27 @@ class MongoDB:
         )
 
     async def get_note(self, chat_id: int, name: str):
+        # Try Cache First
+        cache_key = f"note:{chat_id}:{name}"
+        cached = await self.cache.get(cache_key)
+        if cached:
+            return cached
+
         notes = await self.get_collection("notes")
-        return await notes.find_one({"chat_id": chat_id, "name": name})
+        doc = await notes.find_one({"chat_id": chat_id, "name": name})
+        
+        if doc:
+            await self.cache.set(cache_key, doc, ttl=600)
+            return doc
+        return None
 
     async def delete_note(self, chat_id: int, name: str):
         notes = await self.get_collection("notes")
         result = await notes.delete_one({"chat_id": chat_id, "name": name})
-        return result.deleted_count > 0
+        if result.deleted_count > 0:
+            await self.cache.delete(f"note:{chat_id}:{name}")
+            return True
+        return False
 
     async def get_all_notes(self, chat_id: int):
         notes = await self.get_collection("notes")
@@ -96,23 +135,29 @@ class MongoDB:
         )
 
     async def get_flood_limit(self, chat_id: int):
+        # Cache this?
+        cache_key = f"flood_limit:{chat_id}"
+        cached = await self.cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         settings = await self.get_collection("settings")
         doc = await settings.find_one({"chat_id": chat_id})
-        return doc.get("flood_limit", 0) if doc else 0
+        limit = doc.get("flood_limit", 0) if doc else 0
+        
+        await self.cache.set(cache_key, limit, ttl=300)
+        return limit
 
     # Federations
     async def create_fed(self, owner_id: int, name: str, fed_id: str):
         feds = await self.get_collection("federations")
-        # Check if name exists
         if await feds.find_one({"name": name}):
             return False
+            
+        # Pydantic Validation
+        fed = FederationDocument(fed_id=fed_id, name=name, owner_id=owner_id)
         
-        await feds.insert_one({
-            "fed_id": fed_id,
-            "name": name,
-            "owner_id": owner_id,
-            "chats": []
-        })
+        await feds.insert_one(fed.model_dump())
         return True
 
     async def get_fed(self, fed_id: str):

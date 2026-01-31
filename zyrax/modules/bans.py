@@ -1,6 +1,7 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message, ChatPermissions
 from zyrax.utils.decorators import require_admin
+from zyrax.utils.errors import error_handler
 
 __mod_name__ = "Bans"
 __help__ = """
@@ -12,6 +13,7 @@ __help__ = """
 """
 
 @Client.on_message(filters.command("ban") & filters.group)
+@error_handler
 @require_admin()
 async def ban_user(client: Client, message: Message):
     if not message.reply_to_message:
@@ -25,6 +27,7 @@ async def ban_user(client: Client, message: Message):
         await message.reply_text(f"Failed to ban: {str(e)}")
 
 @Client.on_message(filters.command("unban") & filters.group)
+@error_handler
 @require_admin()
 async def unban_user(client: Client, message: Message):
     if not message.reply_to_message:
@@ -38,6 +41,7 @@ async def unban_user(client: Client, message: Message):
         await message.reply_text(f"Failed to unban: {str(e)}")
 
 @Client.on_message(filters.command("kick") & filters.group)
+@error_handler
 @require_admin()
 async def kick_user(client: Client, message: Message):
     if not message.reply_to_message:
@@ -52,6 +56,7 @@ async def kick_user(client: Client, message: Message):
         await message.reply_text(f"Failed to kick: {str(e)}")
 
 @Client.on_message(filters.command("mute") & filters.group)
+@error_handler
 @require_admin()
 async def mute_user(client: Client, message: Message):
     if not message.reply_to_message:
@@ -66,6 +71,7 @@ async def mute_user(client: Client, message: Message):
         await message.reply_text(f"Failed to mute: {str(e)}")
 
 @Client.on_message(filters.command("unmute") & filters.group)
+@error_handler
 @require_admin()
 async def unmute_user(client: Client, message: Message):
     if not message.reply_to_message:

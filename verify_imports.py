@@ -7,6 +7,7 @@ os.environ["MONGO_URL"] = "mongodb://localhost:27017"
 
 from unittest.mock import MagicMock
 sys.modules["motor.motor_asyncio"] = MagicMock()
+sys.modules["redis.asyncio"] = MagicMock()
 
 try:
     print("Verifying imports...")
@@ -31,6 +32,8 @@ try:
     import zyrax.modules.games
     import zyrax.modules.fun
     import zyrax.modules.ai
+    import zyrax.modules.tournaments
+    import zyrax.modules.bridge
     print("All modules imported successfully.")
     
 except Exception as e:
