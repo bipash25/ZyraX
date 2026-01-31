@@ -291,7 +291,7 @@ class MongoDB:
             {"user_id": user_id},
             {
                 "$set": {"username": username, "last_seen": time.time()},
-                "$setOnInsert": {"xp": 0, "level": 1, "balance": 0}
+                "$setOnInsert": {"xp": 0, "level": 1, "balance": 0, "inventory": [], "title": None}
             },
             upsert=True
         )
@@ -355,5 +355,20 @@ class MongoDB:
         users = await self.get_collection("users")
         cursor = users.find().sort(sort_by, -1).limit(limit)
         return [doc async for doc in cursor]
+
+    # Shop / Inventory
+    async def add_inventory_item(self, user_id: int, item_id: str):
+        users = await self.get_collection("users")
+        await users.update_one(
+            {"user_id": user_id},
+            {"$addToSet": {"inventory": item_id}}
+        )
+
+    async def set_title(self, user_id: int, title: str):
+        users = await self.get_collection("users")
+        await users.update_one(
+            {"user_id": user_id},
+            {"$set": {"title": title}}
+        )
 
 db = MongoDB()
