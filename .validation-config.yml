@@ -1,0 +1,137 @@
+# ZyraX Bot Validation Configuration
+# This file controls the behavior of the validation script
+
+# General settings
+general:
+  max_file_size_mb: 5
+  parallel_workers: 4
+  output_format: "terminal"  # Options: terminal, json, html
+  fail_on_errors: true
+  fail_on_warnings: false
+
+# Directory configuration
+paths:
+  handlers_dir: "handlers"
+  core_dir: "core"
+  middleware_dir: "middleware"
+  utils_dir: "utils"
+  ignore_patterns:
+    - "*/venv/*"
+    - "*/ZyraXLegacy/*"
+    - "*/__pycache__/*"
+    - "*/node_modules/*"
+    - "*/.git/*"
+    - "*/tools/*"
+
+# Check configurations
+checks:
+  command_structure:
+    enabled: true
+    severity: "error"
+    required_fields:
+      - name
+      - description
+      - category
+      - usage
+    recommended_fields:
+      - aliases
+      - scope
+    require_handle_function: true
+  
+  duplicates:
+    enabled: true
+    severity: "error"
+    check_aliases: true
+    check_commands: true
+  
+  datetime_usage:
+    enabled: true
+    severity: "warning"
+    allowed_patterns:
+      - "now_utc()"
+      - "datetime.now(timezone.utc)"
+      - "time.time()"
+    forbidden_patterns:
+      - "datetime.utcnow()"
+      - "datetime.now()"  # Without timezone
+  
+  decorators:
+    enabled: true
+    severity: "warning"
+    require_log_command:
+      categories: ["moderation", "admin", "federation", "warnings"]
+    require_admin:
+      categories: ["admin", "moderation"]
+    check_decorator_order: true
+  
+  security:
+    enabled: true
+    severity: "critical"
+    checks:
+      - hardcoded_tokens
+      - sql_injection
+      - command_injection
+      - eval_exec_usage
+      - unsafe_deserialization
+      - path_traversal
+  
+  telegram_api:
+    enabled: true
+    severity: "warning"
+    checks:
+      - message_length_limits
+      - callback_data_length
+      - deprecated_methods
+      - api_error_handling
+      - file_size_validation
+  
+  database:
+    enabled: true
+    severity: "warning"
+    require_error_handling: true
+    check_connection_cleanup: true
+    check_transaction_usage: false
+  
+  async_await:
+    enabled: true
+    severity: "error"
+    detect_blocking_io: true
+    check_missing_await: true
+  
+  code_quality:
+    enabled: true
+    max_file_lines: 500
+    max_function_lines: 100
+    max_complexity: 15
+
+# External tool integration
+external_tools:
+  flake8:
+    enabled: false
+    max_line_length: 120
+  
+  bandit:
+    enabled: false
+    confidence_level: "medium"
+  
+  mypy:
+    enabled: false
+    strict_mode: false
+
+# Auto-fix settings
+autofix:
+  enabled: false
+  backup_files: true
+  fixes:
+    - datetime_usage
+    - import_sorting
+    - trailing_whitespace
+
+# Reporting
+reporting:
+  show_summary: true
+  show_statistics: true
+  show_category_breakdown: true
+  color_output: true
+  verbose: false
+

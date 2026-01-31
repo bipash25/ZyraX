@@ -1,0 +1,71 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv
+
+# Environment Variables
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data & Logs
+ZyraXLegacy/
+data/
+*.log
+*.db
+*.sqlite
+*.sqlite3
+
+# Pyrogram Sessions
+*.session
+*.session-journal
+
+# Test Coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Temporary Files
+*.tmp
+temp/
+tmp/
+
+# Backup Files
+*.bak
+backup/
+
+# PM2 (Linux/Mac only)
+ecosystem.config.js
+.pm2/
