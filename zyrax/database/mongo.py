@@ -289,7 +289,10 @@ class MongoDB:
         users = await self.get_collection("users")
         await users.update_one(
             {"user_id": user_id},
-            {"$set": {"username": username, "last_seen": time.time()}},
+            {
+                "$set": {"username": username, "last_seen": time.time()},
+                "$setOnInsert": {"xp": 0, "level": 1, "balance": 0}
+            },
             upsert=True
         )
 
@@ -321,5 +324,36 @@ class MongoDB:
     async def track_command_usage(self):
         today = time.strftime("%Y-%m-%d")
         await self.redis.incr(f"stats:commands:{today}")
+
+    # Economy & Levels
+    async def add_xp(self, user_id: int, amount: int):
+        users = await self.get_collection("users")
+        await users.update_one(
+            {"user_id": user_id},
+            {"$inc": {"xp": amount}}
+        )
+        
+    async def get_user_data(self, user_id: int):
+        users = await self.get_collection("users")
+        return await users.find_one({"user_id": user_id})
+
+    async def update_level(self, user_id: int, new_level: int):
+        users = await self.get_collection("users")
+        await users.update_one(
+            {"user_id": user_id},
+            {"$set": {"level": new_level}}
+        )
+
+    async def add_balance(self, user_id: int, amount: int):
+        users = await self.get_collection("users")
+        await users.update_one(
+            {"user_id": user_id},
+            {"$inc": {"balance": amount}}
+        )
+
+    async def get_top_users(self, limit: int = 10, sort_by: str = "xp"):
+        users = await self.get_collection("users")
+        cursor = users.find().sort(sort_by, -1).limit(limit)
+        return [doc async for doc in cursor]
 
 db = MongoDB()
