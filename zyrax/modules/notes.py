@@ -2,6 +2,7 @@ from pyrogram import Client, filters
 from pyrogram.types import Message
 from zyrax.utils.decorators import require_admin
 from zyrax.database.mongo import db
+from zyrax.utils.validators import InputValidator
 
 __mod_name__ = "Notes"
 __help__ = """
@@ -17,7 +18,7 @@ async def save_note(client: Client, message: Message):
     if len(message.command) < 2:
         return await message.reply_text("Usage: /save <notename> (reply to message or provide text)")
     
-    note_name = message.command[1].lower()
+    note_name = InputValidator.sanitize_text(message.command[1].lower())
     
     # Check if reply or text
     if message.reply_to_message:
@@ -79,7 +80,7 @@ async def save_note(client: Client, message: Message):
 
     elif len(message.command) > 2:
         # /save name text content
-        data = {"type": "text", "content": message.text.split(None, 2)[2]}
+        data = {"type": "text", "content": InputValidator.sanitize_text(message.text.split(None, 2)[2])}
     else:
         return await message.reply_text("You need to provide content or reply to a message.")
 
@@ -91,7 +92,7 @@ async def get_note_cmd(client: Client, message: Message):
     if len(message.command) < 2:
         return await message.reply_text("Usage: /get <notename>")
     
-    note_name = message.command[1].lower()
+    note_name = InputValidator.sanitize_text(message.command[1].lower())
     await send_note(client, message, note_name)
 
 @Client.on_message(filters.regex(r"^#(\w+)") & filters.group)
@@ -132,7 +133,7 @@ async def clear_note(client: Client, message: Message):
     if len(message.command) < 2:
         return await message.reply_text("Usage: /clear <notename>")
     
-    note_name = message.command[1].lower()
+    note_name = InputValidator.sanitize_text(message.command[1].lower())
     deleted = await db.delete_note(message.chat.id, note_name)
     if deleted:
         await message.reply_text(f"Deleted note `{note_name}`.")

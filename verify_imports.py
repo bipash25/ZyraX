@@ -17,6 +17,9 @@ try:
     print("Database imported.")
     import zyrax.utils.decorators
     print("Decorators imported.")
+    import zyrax.utils.validators
+    import zyrax.utils.ratelimit
+    print("Security utils imported.")
     
     # Import modules
     import zyrax.modules.admin

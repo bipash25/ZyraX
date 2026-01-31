@@ -2,6 +2,7 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, ChatPermissions
 from zyrax.utils.decorators import require_admin
 from zyrax.utils.errors import error_handler
+from zyrax.utils.ratelimit import rate_limit
 
 __mod_name__ = "Bans"
 __help__ = """
@@ -13,6 +14,7 @@ __help__ = """
 """
 
 @Client.on_message(filters.command("ban") & filters.group)
+@rate_limit(max_attempts=5, window=60)
 @error_handler
 @require_admin()
 async def ban_user(client: Client, message: Message):
@@ -41,6 +43,7 @@ async def unban_user(client: Client, message: Message):
         await message.reply_text(f"Failed to unban: {str(e)}")
 
 @Client.on_message(filters.command("kick") & filters.group)
+@rate_limit(max_attempts=10, window=60)
 @error_handler
 @require_admin()
 async def kick_user(client: Client, message: Message):
