@@ -39,6 +39,7 @@ services:
     container_name: zyrax_nginx
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./deployment/nginx/conf.d:/etc/nginx/conf.d
       - ./deployment/certbot/conf:/etc/letsencrypt

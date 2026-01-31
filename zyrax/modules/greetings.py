@@ -14,9 +14,6 @@ async def welcome(client: Client, message: Message):
         # Check if it's the bot itself
         if member.id == client.me.id:
              await message.reply_text(f"Hello! I am ZyraX. Thanks for adding me to {message.chat.title}!")
-        else:
-             # Basic welcome message
-             await message.reply_text(f"Welcome to {message.chat.title}, {member.mention}!")
 
 @Client.on_message(filters.left_chat_member & filters.group)
 async def goodbye(client: Client, message: Message):
