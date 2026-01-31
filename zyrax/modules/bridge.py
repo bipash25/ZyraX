@@ -1,6 +1,7 @@
 import asyncio
 from aiohttp import web
 from pyrogram import Client, filters
+from pyrogram.types import Message
 from zyrax.config import Config
 
 __mod_name__ = "Bridge"
