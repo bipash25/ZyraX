@@ -2,6 +2,8 @@
 
 **ZyraX** is a powerful, modular, and asynchronous Telegram Bot built with Python and Pyrogram. Designed for scalability, it features a plugin-based architecture allowing it to handle everything from group moderation to AI image generation.
 
+Now features a **Web Dashboard** for real-time analytics and management!
+
 ## 🚀 Features
 
 ### 🛡️ Moderation & Administration
@@ -17,6 +19,11 @@
 - **Notes**: Save and retrieve commonly used messages/media.
 - **Anti-Flood**: Automated spam protection with configurable limits.
 
+### 📊 Dashboard & Analytics (New!)
+- **Web Interface**: Manage your bot via a beautiful web UI.
+- **Real-Time Stats**: View command usage, active chats, and user growth.
+- **Premium System**: Built-in monetization pages for subscription management.
+
 ### 🎮 Fun & Tournaments
 - **Tournament System**: Create and manage bracket-style tournaments automatically.
 - **Games**: Interactive Dice, Darts, RPS.
@@ -29,51 +36,123 @@
 ## 🛠️ Tech Stack
 - **Language**: Python 3.11+
 - **Framework**: [Pyrogram](https://docs.pyrogram.org/) (MTProto)
-- **Database**: MongoDB (Motor Async Driver)
+- **Web**: FastAPI + Jinja2 + TailwindCSS
+- **Database**: MongoDB (Motor Async Driver) + Redis (Caching)
 - **Deployment**: Docker & Docker Compose
 
-## 📦 Installation
+---
+
+## 📦 Installation Guide
 
 ### Prerequisites
-- Python 3.11 or higher
-- MongoDB (Local or Atlas)
-- Telegram API Credentials (`API_ID`, `API_HASH`)
-- Bot Token (from @BotFather)
+Before you begin, ensure you have usage access to:
+1.  **Python 3.11+**: [Download Here](https://www.python.org/downloads/)
+2.  **MongoDB**: [Community Server](https://www.mongodb.com/try/download/community) or [MongoDB Atlas](https://www.mongodb.com/atlas) (Cloud).
+3.  **Redis**: [Redis.io](https://redis.io/download) (For caching & stats).
+4.  **Telegram API**: Get `API_ID` and `API_HASH` from [my.telegram.org](https://my.telegram.org).
+5.  **Bot Token**: Get it from [@BotFather](https://t.me/BotFather).
 
-### Option A: Docker (Recommended)
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/bipash25/ZyraX.git
-   cd ZyraX
-   ```
-2. **Configure Environment**
-   Rename `.env.sample` to `.env` and fill in your details:
-   ```env
-   API_ID=12345
-   API_HASH=abcdef...
-   BOT_TOKEN=123:ABC...
-   MONGO_URL=mongodb://mongo:27017 # Use exact string if using Docker
-   OPENAI_API_KEY=sk-... # Optional (For AI)
-   OWNER_ID=123456789
-   ```
-3. **Run with Compose**
-   ```bash
-   docker-compose up -d
-   ```
+---
 
-### Option B: Local Setup
-1. **Clone and Install Dependencies**
-   ```bash
-   git clone https://github.com/bipash25/ZyraX.git
-   cd ZyraX
-   pip install -r requirements.txt
-   ```
-2. **Configure Environment**
-   Edit `.env` as above (Set `MONGO_URL` to your local instance, e.g., `mongodb://localhost:27017`).
-3. **Run the Bot**
-   ```bash
-   python -m zyrax
-   ```
+### Windows Tutorial 🪟
+
+1.  **Clone the Repository**
+    Open PowerShell or Command Prompt:
+    ```powershell
+    git clone https://github.com/bipash25/ZyraX.git
+    cd ZyraX
+    ```
+
+2.  **Create Virtual Environment**
+    It's recommended to use a virtual environment:
+    ```powershell
+    python -m venv venv
+    .\venv\Scripts\Activate
+    ```
+
+3.  **Install Dependencies**
+    ```powershell
+    pip install -r requirements.txt
+    ```
+
+4.  **Configuration**
+    Copy the sample config:
+    ```powershell
+    copy .env.sample .env
+    ```
+    Open `.env` in Notepad (or VS Code) and fill in your details:
+    ```env
+    API_ID=123456
+    API_HASH=your_api_hash
+    BOT_TOKEN=123:ABC...
+    MONGO_URL=mongodb://localhost:27017
+    REDIS_URL=redis://localhost:6379
+    OPENAI_API_KEY=sk-... (Optional)
+    OWNER_ID=123456789
+    ```
+
+5.  **Run the Bot**
+    ```powershell
+    python -m zyrax
+    ```
+    *The bot will start, and the Dashboard will be live at `http://localhost:8080`.*
+
+---
+
+### macOS / Linux Tutorial 🐧
+
+1.  **Clone the Repository**
+    Open Terminal:
+    ```bash
+    git clone https://github.com/bipash25/ZyraX.git
+    cd ZyraX
+    ```
+
+2.  **Create Virtual Environment**
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate
+    ```
+
+3.  **Install Dependencies**
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+4.  **Configuration**
+    Copy the sample config:
+    ```bash
+    cp .env.sample .env
+    ```
+    Edit `.env` using `nano` or your preferred editor:
+    ```bash
+    nano .env
+    ```
+    Fill in your API credentials (as shown in the Windows section).
+
+5.  **Run the Bot**
+    ```bash
+    python3 -m zyrax
+    ```
+
+---
+
+### Option C: Docker (Cross-Platform) 🐳
+
+If you have Docker installed, this is the easiest method.
+
+1.  **Clone and Config**
+    ```bash
+    git clone https://github.com/bipash25/ZyraX.git
+    cd ZyraX
+    mv .env.sample .env
+    # Edit .env with your credentials
+    ```
+
+2.  **Run**
+    ```bash
+    docker-compose up -d
+    ```
 
 ## 📝 Commands
 | Module | Command | Description |
@@ -84,6 +163,7 @@
 | **Tourney**| `/tourney`, `/bracket` | Tournament system |
 | **Feds** | `/newfed`, `/fban` | Federation management |
 | **Notes** | `/save`, `/get` | Saved snippets |
+| **Web** | `http://localhost:8080/` | View Dashboard |
 
 ## 🤝 Contributing
 Contributions are welcome! This project uses a modular design—simply add a new `.py` file to `zyrax/modules/` with `__mod_name__` and `__help__` variables, and it will load automatically.
