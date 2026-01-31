@@ -18,6 +18,21 @@ Run the production composition which includes Nginx:
 docker-compose -f docker-compose.prod.yml up -d --build
 ```
 
-## 4. SSL/HTTPS (Optional but Recommended)
-For key deployment, we recommend using **Certbot** on the host machine or adding a `certbot` container.
-*Simplest method*: Use Cloudflare's "Flexible SSL" if your DNS is managed there. Nginx listens on Port 80, and Cloudflare handles the encryption to the user.
+## 4. SSL/HTTPS (Automated) 🔒
+We have included a script to automate Let's Encrypt certificate generation.
+
+1.  **Make script executable**:
+    ```bash
+    chmod +x init-letsencrypt.sh
+    ```
+2.  **Run the initialization**:
+    ```bash
+    ./init-letsencrypt.sh
+    ```
+    *This will:*
+    -   generate a placeholder certificate
+    -   start nginx
+    -   request the real certificate via Certbot
+    -   reload nginx
+
+3.  **Auto-Renewal**: The `certbot` service in `docker-compose.prod.yml` will automatically check for renewal every 12 hours.

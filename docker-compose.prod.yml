@@ -41,9 +41,20 @@ services:
       - "80:80"
     volumes:
       - ./deployment/nginx/conf.d:/etc/nginx/conf.d
+      - ./deployment/certbot/conf:/etc/letsencrypt
+      - ./deployment/certbot/www:/var/www/certbot
     depends_on:
       - zyrax
     restart: always
+    networks:
+      - zyrax_net
+
+  certbot:
+    image: certbot/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    volumes:
+      - ./deployment/certbot/conf:/etc/letsencrypt
+      - ./deployment/certbot/www:/var/www/certbot
     networks:
       - zyrax_net
 
