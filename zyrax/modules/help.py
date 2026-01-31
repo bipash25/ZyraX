@@ -19,7 +19,7 @@ async def help_command(client: Client, message: Message):
     else:
         buttons = []
         for mod in sorted(MOD_HELP.keys()):
-            buttons.append(InlineKeyboardButton(mod, callback_data=f"help_{mod}"))
+            buttons.append(InlineKeyboardButton(mod, callback_data=f"help_mod_{mod}"))
         
         # Chunk buttons into rows of 3
         keyboard = [buttons[i:i + 3] for i in range(0, len(buttons), 3)]
@@ -29,9 +29,9 @@ async def help_command(client: Client, message: Message):
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
-@Client.on_callback_query(filters.regex(r"help_(.*)"))
+@Client.on_callback_query(filters.regex(r"help_mod_(.*)"))
 async def help_callback(client: Client, callback_query: CallbackQuery):
-    module_name = callback_query.data.split("_")[1]
+    module_name = callback_query.data.split("_")[2]
     if module_name in MOD_HELP:
         await callback_query.edit_message_text(
             f"**Help for {module_name}:**\n{MOD_HELP[module_name]}",
@@ -44,7 +44,7 @@ async def help_callback(client: Client, callback_query: CallbackQuery):
 async def help_back(client: Client, callback_query: CallbackQuery):
     buttons = []
     for mod in sorted(MOD_HELP.keys()):
-        buttons.append(InlineKeyboardButton(mod, callback_data=f"help_{mod}"))
+        buttons.append(InlineKeyboardButton(mod, callback_data=f"help_mod_{mod}"))
     
     keyboard = [buttons[i:i + 3] for i in range(0, len(buttons), 3)]
     
