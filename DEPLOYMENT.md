@@ -9,7 +9,7 @@
 
 ## 2. Configuration
 1.  Open `deployment/nginx/conf.d/zyrax.conf`.
-2.  Replace `server_name zygrax.bipro.tech;` with your actual domain (e.g., `bot.bipro.tech`).
+2.  Replace `server_name zyrax.bipro.tech;` with your actual domain (e.g., `bot.bipro.tech`).
 
 ## 3. Launching
 Run the production composition which includes Nginx:
