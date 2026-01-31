@@ -1,38 +1,39 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2 class="text-2xl font-bold mb-6">Upgrade to Premium</h2>
+<h2 class="text-2xl font-bold mb-6">Why ZyraX is Free?</h2>
 
-<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-    <!-- Free Plan -->
-    <div class="bg-gray-800 p-8 rounded-lg shadow-lg border border-gray-700">
-        <h3 class="text-xl font-bold text-gray-400">Basic</h3>
-        <p class="text-4xl font-bold mt-4">$0 <span class="text-sm text-gray-500">/ month</span></p>
-        <ul class="mt-6 space-y-4 text-gray-300">
-            <li>✅ Basic Moderation</li>
-            <li>✅ Anti-Flood Protection</li>
-            <li>✅ 5 Filters per Chat</li>
-            <li>❌ AI Image Generation</li>
-        </ul>
-        <button class="mt-8 w-full bg-gray-700 text-white font-bold py-2 px-4 rounded cursor-not-allowed"
-            disabled>Current Plan</button>
+<div class="bg-gray-800 p-8 rounded-lg shadow-lg border border-purple-500 text-center">
+    <h3 class="text-3xl font-bold text-white mb-4">🚀 100% Free & Open Source</h3>
+    <p class="text-gray-300 text-lg mb-8">
+        We believe in providing the best moderation and entertainment tools for free.
+        ZyraX is currently in active development and we want everyone to enjoy the full experience without paywalls.
+    </p>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
+        <div class="bg-gray-700 p-4 rounded-lg">
+            <h4 class="font-bold text-purple-400 text-lg">🛡️ Moderation</h4>
+            <p class="text-gray-400 mt-2">Protect your chat with advanced filters, anti-spam, and federation bans.</p>
+        </div>
+        <div class="bg-gray-700 p-4 rounded-lg">
+            <h4 class="font-bold text-green-400 text-lg">🤖 AI Features</h4>
+            <p class="text-gray-400 mt-2">Generate images and chat with AI assistants at no cost.</p>
+        </div>
+        <div class="bg-gray-700 p-4 rounded-lg">
+            <h4 class="font-bold text-blue-400 text-lg">🎮 Entertainment</h4>
+            <p class="text-gray-400 mt-2">Engage your members with games, tournnaments, and fun commands.</p>
+        </div>
     </div>
 
-    <!-- Premium Plan -->
-    <div class="bg-gray-800 p-8 rounded-lg shadow-lg border border-purple-500 relative overflow-hidden">
-        <div class="absolute top-0 right-0 bg-purple-600 text-white text-xs font-bold px-3 py-1 rounded-bl-lg">POPULAR
-        </div>
-        <h3 class="text-xl font-bold text-purple-400">Pro</h3>
-        <p class="text-4xl font-bold mt-4">$5 <span class="text-sm text-gray-500">/ month</span></p>
-        <ul class="mt-6 space-y-4 text-gray-300">
-            <li>✅ Service Level Agreement</li>
-            <li>✅ Unlimited Filters</li>
-            <li>✅ AI Image Generation</li>
-            <li>✅ Priority Support</li>
-        </ul>
-        <a href="#"
-            class="block text-center mt-8 w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded transition">Upgrade
-            Now</a>
+    <div class="mt-10">
+        <a href="https://github.com/bipash25/ZyraX" target="_blank"
+            class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-8 rounded-full transition duration-300">
+            ⭐ Star on GitHub
+        </a>
+        <a href="https://t.me/ZyraXBot" target="_blank"
+            class="ml-4 bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-8 rounded-full transition duration-300">
+            Add to Group
+        </a>
     </div>
 </div>
 {% endblock %}
