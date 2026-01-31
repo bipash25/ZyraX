@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  zyrax:
+    build: .
+    container_name: zyrax_bot
+    restart: always
+    env_file:
+      - .env
+    depends_on:
+      - mongo
+    environment:
+      - MONGO_URL=mongodb://mongo:27017
+
+  mongo:
+    image: mongo:latest
+    container_name: zyrax_mongo
+    restart: always
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  mongo_data:
