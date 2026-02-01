@@ -5,6 +5,7 @@ from zyrax.utils.decorators import require_admin
 from zyrax.utils.errors import error_handler
 from zyrax.utils.images import generate_welcome_image
 from zyrax.utils.formatting import format_text
+from zyrax.utils.i18n import get_text
 
 __mod_name__ = "Welcome"
 __help__ = """
@@ -28,6 +29,9 @@ Variables for welcome/goodbye:
 @Client.on_message(filters.new_chat_members & filters.group)
 @error_handler
 async def welcome(client: Client, message: Message):
+    # Get chat language for i18n
+    lang = await db.get_chat_language(message.chat.id)
+    
     for member in message.new_chat_members:
         # Check if it's the bot itself
         if member.id == client.me.id:
@@ -44,7 +48,7 @@ async def welcome(client: Client, message: Message):
              # Generate Image
             img_bio = generate_welcome_image(member.first_name, member.id, message.chat.title)
             
-            caption = f"Welcome {member.mention} to **{message.chat.title}**!"
+            caption = get_text("welcome", lang, chatname=message.chat.title, mention=member.mention)
             if welcome_data and welcome_data.get("content"):
                 caption = await format_text(welcome_data["content"], member, message.chat)
             
@@ -55,8 +59,8 @@ async def welcome(client: Client, message: Message):
             content = await format_text(welcome_data["content"], member, message.chat)
             await message.reply_text(content)
         else:
-            # Default welcome
-            await message.reply_text(f"Welcome {member.mention} to {message.chat.title}!")
+            # Default welcome using i18n
+            await message.reply_text(get_text("welcome", lang, chatname=message.chat.title, mention=member.mention))
 
 @Client.on_message(filters.command("welcomemode") & filters.group)
 @require_admin()
@@ -89,18 +93,23 @@ async def goodbye(client: Client, message: Message):
     if member.id == client.me.id:
         return 
     
+    # Get chat language for i18n
+    lang = await db.get_chat_language(message.chat.id)
+    
     # Get custom goodbye
     goodbye_data = await db.get_goodbye(message.chat.id)
     if goodbye_data and goodbye_data.get("content"):
         content = await format_text(goodbye_data["content"], member, message.chat)
         await message.reply_text(content)
     else:
-        await message.reply_text(f"Goodbye {member.mention}!")
+        await message.reply_text(get_text("goodbye", lang, first=member.first_name))
 
 @Client.on_message(filters.command("setwelcome") & filters.group)
 @require_admin()
 @error_handler
 async def set_welcome(client: Client, message: Message):
+    lang = await db.get_chat_language(message.chat.id)
+    
     if len(message.command) < 2 and not message.reply_to_message:
         return await message.reply_text("Usage: /setwelcome <text> or reply to a message")
     
@@ -110,7 +119,7 @@ async def set_welcome(client: Client, message: Message):
         content = message.text.split(None, 1)[1]
         
     await db.set_welcome(message.chat.id, content=content)
-    await message.reply_text("Welcome message set!")
+    await message.reply_text(get_text("success", lang))
 
 @Client.on_message(filters.command("delwelcome") & filters.group)
 @require_admin()
@@ -146,9 +155,10 @@ async def del_goodbye(client: Client, message: Message):
 @Client.on_message(filters.command("rules") & filters.group)
 @error_handler
 async def get_rules(client: Client, message: Message):
+    lang = await db.get_chat_language(message.chat.id)
     rules = await db.get_rules(message.chat.id)
     if not rules:
-        return await message.reply_text("No rules set for this chat.")
+        return await message.reply_text(get_text("no_rules", lang))
         
     # Send rules in PM if button clicked? For now just reply.
     # We can add a button "Read Rules in PM" if rules are long.
@@ -165,6 +175,8 @@ async def get_rules(client: Client, message: Message):
 @require_admin()
 @error_handler
 async def set_rules(client: Client, message: Message):
+    lang = await db.get_chat_language(message.chat.id)
+    
     if len(message.command) < 2 and not message.reply_to_message:
         return await message.reply_text("Usage: /setrules <text> or reply to a message")
     
@@ -174,7 +186,7 @@ async def set_rules(client: Client, message: Message):
         content = message.text.split(None, 1)[1]
         
     await db.set_rules(message.chat.id, rules=content)
-    await message.reply_text("Rules set successfully!")
+    await message.reply_text(get_text("rules_set", lang))
 
 @Client.on_message(filters.command("clearrules") & filters.group)
 @require_admin()

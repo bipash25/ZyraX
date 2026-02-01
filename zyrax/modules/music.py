@@ -23,6 +23,11 @@ __help__ = """
 /remove <number> - Remove track from queue
 /clear - Clear the queue
 
+**Radio Streams:**
+/radio <station> - Play radio station
+/stations - List available stations
+/stopradio - Stop radio playback
+
 **Info:**
 /lyrics <song> - Search for lyrics
 """
@@ -321,3 +326,136 @@ async def lyrics_search(client: Client, message: Message):
                     await m.edit_text("Lyrics not found. Try: /lyrics Artist - Song")
     except Exception as e:
         await m.edit_text(f"Error searching lyrics: {e}")
+
+
+# ===== RADIO STREAMS =====
+RADIO_STATIONS = {
+    "lofi": {
+        "name": "Lofi Hip Hop",
+        "url": "https://streams.ilovemusic.de/iloveradio17.mp3",
+        "genre": "Chill"
+    },
+    "jazz": {
+        "name": "Smooth Jazz",
+        "url": "https://strw3.openstream.co/654?aw_0_1st.collession=default",
+        "genre": "Jazz"
+    },
+    "classical": {
+        "name": "Classical Radio",
+        "url": "https://live.musopen.org:8085/streamvbr0",
+        "genre": "Classical"
+    },
+    "pop": {
+        "name": "Pop Hits",
+        "url": "https://streams.ilovemusic.de/iloveradio1.mp3",
+        "genre": "Pop"
+    },
+    "rock": {
+        "name": "Rock Radio",
+        "url": "https://streams.ilovemusic.de/iloveradio16.mp3",
+        "genre": "Rock"
+    },
+    "electronic": {
+        "name": "Electronic Beats",
+        "url": "https://streams.ilovemusic.de/iloveradio2.mp3",
+        "genre": "Electronic"
+    },
+    "hiphop": {
+        "name": "Hip Hop Hits",
+        "url": "https://streams.ilovemusic.de/iloveradio3.mp3",
+        "genre": "Hip Hop"
+    },
+    "ambient": {
+        "name": "Ambient Chill",
+        "url": "https://ice2.somafm.com/dronezone-128-mp3",
+        "genre": "Ambient"
+    }
+}
+
+RADIO_PLAYING = {}  # {chat_id: station_key}
+
+
+@Client.on_message(filters.command("stations") & filters.group)
+async def list_stations(client: Client, message: Message):
+    text = "**Available Radio Stations:**\n\n"
+    
+    for key, station in RADIO_STATIONS.items():
+        text += f"**{station['name']}** (`{key}`)\n"
+        text += f"  Genre: {station['genre']}\n\n"
+    
+    text += "\nUse: /radio <station_code>"
+    await message.reply_text(text)
+
+
+@Client.on_message(filters.command("radio") & filters.group)
+@error_handler
+async def radio_play(client: Client, message: Message):
+    if len(message.command) < 2:
+        return await message.reply_text(
+            "Usage: /radio <station>\n"
+            "Use /stations to see available stations."
+        )
+    
+    station_key = message.command[1].lower()
+    
+    if station_key not in RADIO_STATIONS:
+        return await message.reply_text(
+            f"Station `{station_key}` not found.\n"
+            "Use /stations to see available stations."
+        )
+    
+    station = RADIO_STATIONS[station_key]
+    chat_id = message.chat.id
+    
+    m = await message.reply_text(f"Connecting to **{station['name']}**...")
+    
+    call_client: PyTgCalls = client.call_client
+    
+    try:
+        # Stop any current playback
+        if chat_id in QUEUES:
+            for track in QUEUES[chat_id]:
+                if os.path.exists(track.get("file", "")):
+                    try:
+                        os.remove(track["file"])
+                    except:
+                        pass
+            del QUEUES[chat_id]
+        
+        if chat_id in NOW_PLAYING:
+            del NOW_PLAYING[chat_id]
+        
+        # Start radio stream
+        await call_client.play(
+            chat_id,
+            MediaStream(station["url"])
+        )
+        
+        RADIO_PLAYING[chat_id] = station_key
+        
+        await m.edit_text(
+            f"**Now Playing Radio**\n\n"
+            f"Station: **{station['name']}**\n"
+            f"Genre: {station['genre']}\n\n"
+            f"Use /stopradio to stop."
+        )
+        
+    except Exception as e:
+        await m.edit_text(f"Error starting radio: {e}")
+
+
+@Client.on_message(filters.command("stopradio") & filters.group)
+async def stop_radio(client: Client, message: Message):
+    chat_id = message.chat.id
+    
+    if chat_id not in RADIO_PLAYING:
+        return await message.reply_text("No radio is currently playing.")
+    
+    call_client: PyTgCalls = client.call_client
+    
+    try:
+        await call_client.leave_call(chat_id)
+        del RADIO_PLAYING[chat_id]
+        await message.reply_text("Radio stopped.")
+    except Exception as e:
+        await message.reply_text(f"Error stopping radio: {e}")

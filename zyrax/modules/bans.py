@@ -5,6 +5,7 @@ from zyrax.utils.errors import error_handler
 from zyrax.utils.ratelimit import rate_limit
 from zyrax.utils.time_parser import parse_duration
 from zyrax.utils.users import extract_user
+from zyrax.utils.i18n import get_text
 from zyrax.database.mongo import db
 import time
 from datetime import datetime, timedelta
@@ -26,46 +27,49 @@ __help__ = """
 @error_handler
 @require_admin()
 async def ban_user(client: Client, message: Message):
+    lang = await db.get_chat_language(message.chat.id)
     user = await extract_user(client, message)
     if not user:
-        return await message.reply_text("Reply to a user or mention them to ban.")
+        return await message.reply_text(get_text("user_not_found", lang))
     
     user_id = user.id if hasattr(user, "id") else user
     user_mention = user.mention if hasattr(user, "mention") else str(user_id)
 
     try:
         await client.ban_chat_member(message.chat.id, user_id)
-        await message.reply_text(f"Banned {user_mention}.")
+        await message.reply_text(get_text("banned", lang, mention=user_mention))
         await db.log_admin_action("ban", client.me.id, message.chat.id, user_id)
     except Exception as e:
-        await message.reply_text(f"Failed to ban: {str(e)}")
+        await message.reply_text(get_text("error", lang, error=str(e)))
 
 @Client.on_message(filters.command("unban") & filters.group)
 @error_handler
 @require_admin()
 async def unban_user(client: Client, message: Message):
+    lang = await db.get_chat_language(message.chat.id)
     user = await extract_user(client, message)
     if not user:
-        return await message.reply_text("Reply to a user or mention them to unban.")
+        return await message.reply_text(get_text("user_not_found", lang))
     
     user_id = user.id if hasattr(user, "id") else user
     user_mention = user.mention if hasattr(user, "mention") else str(user_id)
 
     try:
         await client.unban_chat_member(message.chat.id, user_id)
-        await message.reply_text(f"Unbanned {user_mention}.")
+        await message.reply_text(get_text("unbanned", lang, mention=user_mention))
         await db.log_admin_action("unban", client.me.id, message.chat.id, user_id)
     except Exception as e:
-        await message.reply_text(f"Failed to unban: {str(e)}")
+        await message.reply_text(get_text("error", lang, error=str(e)))
 
 @Client.on_message(filters.command("kick") & filters.group)
 @rate_limit(max_attempts=10, window=60)
 @error_handler
 @require_admin()
 async def kick_user(client: Client, message: Message):
+    lang = await db.get_chat_language(message.chat.id)
     user = await extract_user(client, message)
     if not user:
-        return await message.reply_text("Reply to a user or mention them to kick.")
+        return await message.reply_text(get_text("user_not_found", lang))
     
     user_id = user.id if hasattr(user, "id") else user
     user_mention = user.mention if hasattr(user, "mention") else str(user_id)
@@ -73,18 +77,19 @@ async def kick_user(client: Client, message: Message):
     try:
         await client.ban_chat_member(message.chat.id, user_id)
         await client.unban_chat_member(message.chat.id, user_id)
-        await message.reply_text(f"Kicked {user_mention}.")
+        await message.reply_text(get_text("kicked", lang, mention=user_mention))
         await db.log_admin_action("kick", client.me.id, message.chat.id, user_id)
     except Exception as e:
-        await message.reply_text(f"Failed to kick: {str(e)}")
+        await message.reply_text(get_text("error", lang, error=str(e)))
 
 @Client.on_message(filters.command("mute") & filters.group)
 @error_handler
 @require_admin()
 async def mute_user(client: Client, message: Message):
+    lang = await db.get_chat_language(message.chat.id)
     user = await extract_user(client, message)
     if not user:
-        return await message.reply_text("Reply to a user or mention them to mute.")
+        return await message.reply_text(get_text("user_not_found", lang))
     
     user_id = user.id if hasattr(user, "id") else user
     user_mention = user.mention if hasattr(user, "mention") else str(user_id)
@@ -92,18 +97,19 @@ async def mute_user(client: Client, message: Message):
     try:
         # Mute indefinitely
         await client.restrict_chat_member(message.chat.id, user_id, ChatPermissions())
-        await message.reply_text(f"Muted {user_mention}.")
+        await message.reply_text(get_text("muted", lang, mention=user_mention))
         await db.log_admin_action("mute", client.me.id, message.chat.id, user_id)
     except Exception as e:
-        await message.reply_text(f"Failed to mute: {str(e)}")
+        await message.reply_text(get_text("error", lang, error=str(e)))
 
 @Client.on_message(filters.command("unmute") & filters.group)
 @error_handler
 @require_admin()
 async def unmute_user(client: Client, message: Message):
+    lang = await db.get_chat_language(message.chat.id)
     user = await extract_user(client, message)
     if not user:
-        return await message.reply_text("Reply to a user or mention them to unmute.")
+        return await message.reply_text(get_text("user_not_found", lang))
     
     user_id = user.id if hasattr(user, "id") else user
     user_mention = user.mention if hasattr(user, "mention") else str(user_id)
@@ -124,10 +130,10 @@ async def unmute_user(client: Client, message: Message):
                 can_pin_messages=False
             )
         )
-        await message.reply_text(f"Unmuted {user_mention}.")
+        await message.reply_text(get_text("unmuted", lang, mention=user_mention))
         await db.log_admin_action("unmute", client.me.id, message.chat.id, user_id)
     except Exception as e:
-        await message.reply_text(f"Failed to unmute: {str(e)}")
+        await message.reply_text(get_text("error", lang, error=str(e)))
 
 @Client.on_message(filters.command("tban") & filters.group)
 @error_handler
