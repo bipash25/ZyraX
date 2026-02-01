@@ -1,4 +1,4 @@
-Pyrogram
+pyrofork
 TgCrypto
 motor
 python-dotenv
@@ -17,3 +17,5 @@ yt-dlp
 google-generativeai
 py-tgcalls
 feedparser
+qrcode[pil]
+python-dateutil

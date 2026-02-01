@@ -1,23 +1,50 @@
 import random
 import aiohttp
 import asyncio
+import html
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from zyrax.database.mongo import db
 
 __mod_name__ = "Games"
 __help__ = """
+**Quick Games:**
 /dice - Roll a dice
 /dart - Throw a dart
-/rps <rock/paper/scissors> - Play Rock Paper Scissors
+/coin - Flip a coin
+/rps <rock/paper/scissors> - Rock Paper Scissors
+
+**Word Games:**
 /trivia - Start a trivia question
-/guess - Start a number guessing game
+/hangman - Start a hangman game
+/scramble - Word scramble game
+
+**Number Games:**
+/guess - Guess the number (1-100)
+/slots - Slot machine (costs coins)
+
+**Two-Player Games:**
+/ttt @user - Tic-Tac-Toe challenge
+
+**Gambling (requires coins):**
+/gamble <amount> - 50/50 double or nothing
+/blackjack <bet> - Play blackjack
 """
 
 # Store active games
-# trivia_games = {chat_id: {"answer": "...", "options": [...]}}
 TRIVIA_GAMES = {}
 GUESS_GAMES = {}
+HANGMAN_GAMES = {}
+SCRAMBLE_GAMES = {}
+TTT_GAMES = {}
+BLACKJACK_GAMES = {}
+
+# Hangman words
+HANGMAN_WORDS = [
+    "python", "telegram", "programming", "developer", "keyboard", "computer",
+    "algorithm", "database", "internet", "software", "hardware", "network",
+    "security", "encryption", "function", "variable", "boolean", "integer"
+]
 
 @Client.on_message(filters.command("dice"))
 async def dice(client: Client, message: Message):
@@ -26,6 +53,11 @@ async def dice(client: Client, message: Message):
 @Client.on_message(filters.command("dart"))
 async def dart(client: Client, message: Message):
     await client.send_dice(message.chat.id, "🎯")
+
+@Client.on_message(filters.command("coin"))
+async def coin_flip(client: Client, message: Message):
+    result = random.choice(["Heads", "Tails"])
+    await message.reply_text(f"**Coin Flip:** {result}!")
 
 @Client.on_message(filters.command("rps"))
 async def rps(client: Client, message: Message):
@@ -49,7 +81,8 @@ async def rps(client: Client, message: Message):
         
     await message.reply_text(f"I chose {bot_choice}. {result}")
 
-# Trivia System
+
+# ===== TRIVIA =====
 @Client.on_message(filters.command("trivia"))
 async def trivia(client: Client, message: Message):
     chat_id = message.chat.id
@@ -64,25 +97,21 @@ async def trivia(client: Client, message: Message):
         return await message.reply_text("Failed to fetch trivia.")
         
     q = data["results"][0]
-    question = q["question"]
-    correct = q["correct_answer"]
-    incorrect = q["incorrect_answers"]
+    question = html.unescape(q["question"])
+    correct = html.unescape(q["correct_answer"])
+    incorrect = [html.unescape(a) for a in q["incorrect_answers"]]
     
     options = incorrect + [correct]
     random.shuffle(options)
     
-    # Store game state
     TRIVIA_GAMES[chat_id] = {
         "correct": correct,
         "options": options
     }
     
-    # Build keyboard
     buttons = []
-    for opt in options:
-        # Use index as callback data to avoid long data issues
-        idx = options.index(opt)
-        buttons.append([InlineKeyboardButton(opt, callback_data=f"trivia_{idx}")])
+    for i, opt in enumerate(options):
+        buttons.append([InlineKeyboardButton(opt, callback_data=f"trivia_{i}")])
         
     await message.reply_text(
         f"**Trivia Time!**\n\n{question}",
@@ -102,28 +131,36 @@ async def trivia_callback(client: Client, callback_query: CallbackQuery):
     if selected == game["correct"]:
         del TRIVIA_GAMES[chat_id]
         await callback_query.message.edit_text(
-            f"✅ Correct! **{callback_query.from_user.mention}** won!\nAnswer: {selected}"
+            f"Correct! **{callback_query.from_user.mention}** won!\nAnswer: {selected}"
         )
-        # Give reward?
-        # await db.add_balance(callback_query.from_user.id, 50)
+        await db.add_balance(callback_query.from_user.id, 25)
+        await db.update_game_stats(callback_query.from_user.id, "trivia", True)
     else:
         await callback_query.answer("Wrong! Try again.", show_alert=True)
 
-# Guess Number System
+
+# ===== GUESS NUMBER =====
 @Client.on_message(filters.command("guess"))
 async def guess_game(client: Client, message: Message):
     chat_id = message.chat.id
     if chat_id in GUESS_GAMES:
-        return await message.reply_text("A guessing game is already in progress!")
+        return await message.reply_text("A guessing game is already in progress! Use /endguess to stop it.")
         
     number = random.randint(1, 100)
     GUESS_GAMES[chat_id] = {"number": number, "attempts": 0}
     
     await message.reply_text(
-        "🔢 **Guess the Number!**\n"
+        "**Guess the Number!**\n"
         "I have picked a number between 1 and 100.\n"
         "Send your guess in the chat!"
     )
+
+@Client.on_message(filters.command("endguess"))
+async def end_guess(client: Client, message: Message):
+    if message.chat.id in GUESS_GAMES:
+        num = GUESS_GAMES[message.chat.id]["number"]
+        del GUESS_GAMES[message.chat.id]
+        await message.reply_text(f"Game ended. The number was **{num}**.")
 
 @Client.on_message(filters.group & filters.text, group=3)
 async def guess_handler(client: Client, message: Message):
@@ -134,7 +171,7 @@ async def guess_handler(client: Client, message: Message):
     try:
         guess = int(message.text)
     except:
-        return # Not a number
+        return
         
     game = GUESS_GAMES[chat_id]
     target = game["number"]
@@ -142,11 +179,315 @@ async def guess_handler(client: Client, message: Message):
     
     if guess == target:
         del GUESS_GAMES[chat_id]
+        reward = max(100 - game["attempts"] * 5, 10)
+        await db.add_balance(message.from_user.id, reward)
+        await db.update_game_stats(message.from_user.id, "guess", True)
         await message.reply_text(
-            f"🎉 **Correct!**\n"
-            f"{message.from_user.mention} guessed the number **{target}** in {game['attempts']} attempts!"
+            f"**Correct!**\n"
+            f"{message.from_user.mention} guessed **{target}** in {game['attempts']} attempts!\n"
+            f"Reward: {reward} coins"
         )
     elif guess < target:
-        await message.reply_text("Too low! ⬆️")
+        await message.reply_text("Too low!")
     else:
-        await message.reply_text("Too high! ⬇️")
+        await message.reply_text("Too high!")
+
+
+# ===== HANGMAN =====
+@Client.on_message(filters.command("hangman"))
+async def hangman_start(client: Client, message: Message):
+    chat_id = message.chat.id
+    if chat_id in HANGMAN_GAMES:
+        return await message.reply_text("A hangman game is already in progress! Use /endhangman")
+    
+    word = random.choice(HANGMAN_WORDS).lower()
+    HANGMAN_GAMES[chat_id] = {
+        "word": word,
+        "guessed": set(),
+        "lives": 6
+    }
+    
+    display = " ".join("_" if c.isalpha() else c for c in word)
+    await message.reply_text(
+        f"**Hangman!**\n\n`{display}`\n\nLives: 6\n\n"
+        f"Guess a letter by typing it!"
+    )
+
+@Client.on_message(filters.command("endhangman"))
+async def hangman_end(client: Client, message: Message):
+    if message.chat.id in HANGMAN_GAMES:
+        word = HANGMAN_GAMES[message.chat.id]["word"]
+        del HANGMAN_GAMES[message.chat.id]
+        await message.reply_text(f"Game ended. The word was: **{word}**")
+
+@Client.on_message(filters.group & filters.text & filters.regex(r"^[a-zA-Z]$"), group=4)
+async def hangman_guess(client: Client, message: Message):
+    chat_id = message.chat.id
+    if chat_id not in HANGMAN_GAMES:
+        return
+    
+    game = HANGMAN_GAMES[chat_id]
+    letter = message.text.lower()
+    
+    if letter in game["guessed"]:
+        return await message.reply_text("Already guessed!")
+    
+    game["guessed"].add(letter)
+    
+    if letter in game["word"]:
+        display = " ".join(c if c in game["guessed"] or not c.isalpha() else "_" for c in game["word"])
+        
+        if "_" not in display:
+            del HANGMAN_GAMES[chat_id]
+            await db.add_balance(message.from_user.id, 50)
+            await db.update_game_stats(message.from_user.id, "hangman", True)
+            return await message.reply_text(f"**You win!** The word was: **{game['word']}**\nReward: 50 coins")
+        
+        await message.reply_text(f"Correct!\n\n`{display}`\n\nLives: {game['lives']}")
+    else:
+        game["lives"] -= 1
+        if game["lives"] <= 0:
+            del HANGMAN_GAMES[chat_id]
+            return await message.reply_text(f"**Game Over!** The word was: **{game['word']}**")
+        
+        display = " ".join(c if c in game["guessed"] or not c.isalpha() else "_" for c in game["word"])
+        await message.reply_text(f"Wrong!\n\n`{display}`\n\nLives: {game['lives']}")
+
+
+# ===== WORD SCRAMBLE =====
+@Client.on_message(filters.command("scramble"))
+async def scramble_start(client: Client, message: Message):
+    chat_id = message.chat.id
+    if chat_id in SCRAMBLE_GAMES:
+        return await message.reply_text("A scramble game is in progress!")
+    
+    word = random.choice(HANGMAN_WORDS)
+    scrambled = list(word)
+    random.shuffle(scrambled)
+    scrambled = "".join(scrambled)
+    
+    SCRAMBLE_GAMES[chat_id] = {"word": word, "scrambled": scrambled}
+    
+    await message.reply_text(
+        f"**Word Scramble!**\n\n"
+        f"Unscramble: `{scrambled}`\n\n"
+        f"Type the correct word!"
+    )
+
+@Client.on_message(filters.group & filters.text, group=5)
+async def scramble_guess(client: Client, message: Message):
+    chat_id = message.chat.id
+    if chat_id not in SCRAMBLE_GAMES:
+        return
+    
+    game = SCRAMBLE_GAMES[chat_id]
+    if message.text.lower() == game["word"]:
+        del SCRAMBLE_GAMES[chat_id]
+        await db.add_balance(message.from_user.id, 30)
+        await db.update_game_stats(message.from_user.id, "scramble", True)
+        await message.reply_text(f"**Correct!** {message.from_user.mention} wins!\nReward: 30 coins")
+
+
+# ===== TIC-TAC-TOE =====
+def render_ttt_board(board):
+    symbols = {0: "⬜", 1: "❌", 2: "⭕"}
+    rows = []
+    for i in range(3):
+        row = ""
+        for j in range(3):
+            row += symbols[board[i*3 + j]]
+        rows.append(row)
+    return "\n".join(rows)
+
+def check_ttt_winner(board):
+    lines = [
+        [0,1,2], [3,4,5], [6,7,8],  # rows
+        [0,3,6], [1,4,7], [2,5,8],  # cols
+        [0,4,8], [2,4,6]  # diagonals
+    ]
+    for line in lines:
+        if board[line[0]] == board[line[1]] == board[line[2]] != 0:
+            return board[line[0]]
+    if 0 not in board:
+        return -1  # Draw
+    return 0  # Game continues
+
+@Client.on_message(filters.command("ttt") & filters.group)
+async def ttt_start(client: Client, message: Message):
+    chat_id = message.chat.id
+    
+    if chat_id in TTT_GAMES:
+        return await message.reply_text("A game is already in progress!")
+    
+    if not message.reply_to_message:
+        return await message.reply_text("Reply to someone to challenge them!")
+    
+    player1 = message.from_user.id
+    player2 = message.reply_to_message.from_user.id
+    
+    if player1 == player2:
+        return await message.reply_text("You can't play against yourself!")
+    
+    TTT_GAMES[chat_id] = {
+        "board": [0] * 9,
+        "player1": player1,
+        "player2": player2,
+        "turn": player1,
+        "p1_name": message.from_user.first_name,
+        "p2_name": message.reply_to_message.from_user.first_name
+    }
+    
+    buttons = []
+    for i in range(3):
+        row = []
+        for j in range(3):
+            idx = i*3 + j
+            row.append(InlineKeyboardButton("⬜", callback_data=f"ttt_{idx}"))
+        buttons.append(row)
+    
+    game = TTT_GAMES[chat_id]
+    await message.reply_text(
+        f"**Tic-Tac-Toe**\n\n{game['p1_name']} (X) vs {game['p2_name']} (O)\n\n{game['p1_name']}'s turn!",
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
+
+@Client.on_callback_query(filters.regex(r"^ttt_"))
+async def ttt_callback(client: Client, callback: CallbackQuery):
+    chat_id = callback.message.chat.id
+    
+    if chat_id not in TTT_GAMES:
+        return await callback.answer("Game ended.", show_alert=True)
+    
+    game = TTT_GAMES[chat_id]
+    user_id = callback.from_user.id
+    
+    if user_id not in [game["player1"], game["player2"]]:
+        return await callback.answer("You're not in this game!", show_alert=True)
+    
+    if user_id != game["turn"]:
+        return await callback.answer("Not your turn!", show_alert=True)
+    
+    idx = int(callback.data.split("_")[1])
+    
+    if game["board"][idx] != 0:
+        return await callback.answer("Cell already taken!", show_alert=True)
+    
+    # Make move
+    symbol = 1 if user_id == game["player1"] else 2
+    game["board"][idx] = symbol
+    
+    # Check winner
+    winner = check_ttt_winner(game["board"])
+    
+    # Update buttons
+    symbols = {0: "⬜", 1: "❌", 2: "⭕"}
+    buttons = []
+    for i in range(3):
+        row = []
+        for j in range(3):
+            cell_idx = i*3 + j
+            row.append(InlineKeyboardButton(symbols[game["board"][cell_idx]], callback_data=f"ttt_{cell_idx}"))
+        buttons.append(row)
+    
+    if winner > 0:
+        winner_name = game["p1_name"] if winner == 1 else game["p2_name"]
+        winner_id = game["player1"] if winner == 1 else game["player2"]
+        del TTT_GAMES[chat_id]
+        await db.add_balance(winner_id, 50)
+        await db.update_game_stats(winner_id, "ttt", True)
+        await callback.message.edit_text(
+            f"**{winner_name} wins!**\n\n{render_ttt_board(game['board'])}\nReward: 50 coins"
+        )
+    elif winner == -1:
+        del TTT_GAMES[chat_id]
+        await callback.message.edit_text(f"**It's a draw!**\n\n{render_ttt_board(game['board'])}")
+    else:
+        game["turn"] = game["player2"] if game["turn"] == game["player1"] else game["player1"]
+        turn_name = game["p1_name"] if game["turn"] == game["player1"] else game["p2_name"]
+        await callback.message.edit_text(
+            f"**Tic-Tac-Toe**\n\n{game['p1_name']} (X) vs {game['p2_name']} (O)\n\n{turn_name}'s turn!",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+    
+    await callback.answer()
+
+
+# ===== SLOTS =====
+@Client.on_message(filters.command("slots"))
+async def slots_game(client: Client, message: Message):
+    user_id = message.from_user.id
+    bet = 10
+    
+    if len(message.command) > 1:
+        try:
+            bet = int(message.command[1])
+        except:
+            pass
+    
+    bet = min(max(bet, 10), 1000)  # 10-1000 range
+    
+    user_data = await db.get_user_data(user_id)
+    balance = user_data.get("balance", 0) if user_data else 0
+    
+    if balance < bet:
+        return await message.reply_text(f"Not enough coins! You have {balance} coins.")
+    
+    await db.add_balance(user_id, -bet)
+    
+    symbols = ["🍎", "🍊", "🍋", "🍇", "🍒", "⭐", "💎"]
+    weights = [30, 25, 20, 15, 7, 2, 1]  # Rarer symbols have lower weight
+    
+    results = random.choices(symbols, weights=weights, k=3)
+    
+    multiplier = 0
+    if results[0] == results[1] == results[2]:
+        if results[0] == "💎":
+            multiplier = 50
+        elif results[0] == "⭐":
+            multiplier = 20
+        else:
+            multiplier = 5
+    elif results[0] == results[1] or results[1] == results[2]:
+        multiplier = 2
+    
+    winnings = bet * multiplier
+    if winnings > 0:
+        await db.add_balance(user_id, winnings)
+    
+    result_str = " | ".join(results)
+    
+    if winnings > 0:
+        await message.reply_text(
+            f"**SLOTS**\n\n[ {result_str} ]\n\n**YOU WIN!** +{winnings} coins!"
+        )
+    else:
+        await message.reply_text(f"**SLOTS**\n\n[ {result_str} ]\n\nNo match. -{bet} coins")
+
+
+# ===== GAMBLE =====
+@Client.on_message(filters.command("gamble"))
+async def gamble_game(client: Client, message: Message):
+    user_id = message.from_user.id
+    
+    if len(message.command) < 2:
+        return await message.reply_text("Usage: /gamble <amount>")
+    
+    try:
+        amount = int(message.command[1])
+    except:
+        return await message.reply_text("Invalid amount.")
+    
+    amount = min(max(amount, 1), 10000)
+    
+    user_data = await db.get_user_data(user_id)
+    balance = user_data.get("balance", 0) if user_data else 0
+    
+    if balance < amount:
+        return await message.reply_text(f"Not enough coins! You have {balance} coins.")
+    
+    if random.random() < 0.45:  # 45% win rate
+        await db.add_balance(user_id, amount)
+        await message.reply_text(f"**You won!** +{amount} coins!\nNew balance: {balance + amount}")
+    else:
+        await db.add_balance(user_id, -amount)
+        await message.reply_text(f"**You lost!** -{amount} coins\nNew balance: {balance - amount}")

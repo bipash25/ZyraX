@@ -616,4 +616,255 @@ class MongoDB:
         await users.delete_one({"user_id": user_id})
         await warnings.delete_many({"user_id": user_id})
 
+    # Anti-Spam Settings
+    async def set_antispam_setting(self, chat_id: int, key: str, value):
+        settings = await self.get_collection("settings")
+        await settings.update_one(
+            {"chat_id": chat_id},
+            {"$set": {f"antispam.{key}": value}},
+            upsert=True
+        )
+
+    async def get_antispam_settings(self, chat_id: int):
+        settings = await self.get_chat_settings(chat_id)
+        return settings.get("antispam", {})
+
+    # Raid Mode
+    async def set_raid_mode(self, chat_id: int, enabled: bool, expires: float):
+        settings = await self.get_collection("settings")
+        await settings.update_one(
+            {"chat_id": chat_id},
+            {"$set": {"raid": {"enabled": enabled, "expires": expires}}},
+            upsert=True
+        )
+
+    async def get_raid_mode(self, chat_id: int):
+        settings = await self.get_chat_settings(chat_id)
+        return settings.get("raid", {"enabled": False, "expires": 0})
+
+    # Link Whitelist
+    async def add_whitelist_domain(self, chat_id: int, domain: str):
+        settings = await self.get_collection("settings")
+        await settings.update_one(
+            {"chat_id": chat_id},
+            {"$addToSet": {"whitelist_domains": domain}},
+            upsert=True
+        )
+
+    async def remove_whitelist_domain(self, chat_id: int, domain: str):
+        settings = await self.get_collection("settings")
+        await settings.update_one(
+            {"chat_id": chat_id},
+            {"$pull": {"whitelist_domains": domain}}
+        )
+
+    async def get_whitelist_domains(self, chat_id: int):
+        settings = await self.get_chat_settings(chat_id)
+        return settings.get("whitelist_domains", [])
+
+    # Reminders
+    async def add_reminder(self, user_id: int, chat_id: int, text: str, remind_at: float):
+        reminders = await self.get_collection("reminders")
+        await reminders.insert_one({
+            "user_id": user_id,
+            "chat_id": chat_id,
+            "text": text,
+            "remind_at": remind_at,
+            "created_at": time.time()
+        })
+
+    async def get_due_reminders(self, current_time: float):
+        reminders = await self.get_collection("reminders")
+        cursor = reminders.find({"remind_at": {"$lte": current_time}})
+        return [doc async for doc in cursor]
+
+    async def delete_reminder(self, reminder_id):
+        reminders = await self.get_collection("reminders")
+        await reminders.delete_one({"_id": reminder_id})
+
+    # Polls
+    async def create_poll(self, chat_id: int, creator_id: int, question: str, options: list, anonymous: bool = False):
+        polls = await self.get_collection("polls")
+        result = await polls.insert_one({
+            "chat_id": chat_id,
+            "creator_id": creator_id,
+            "question": question,
+            "options": {str(i): {"text": opt, "votes": []} for i, opt in enumerate(options)},
+            "anonymous": anonymous,
+            "active": True,
+            "created_at": time.time()
+        })
+        return result.inserted_id
+
+    async def vote_poll(self, poll_id, user_id: int, option_index: str):
+        polls = await self.get_collection("polls")
+        # Remove previous vote
+        poll = await polls.find_one({"_id": poll_id})
+        if poll:
+            for opt_idx in poll["options"]:
+                await polls.update_one(
+                    {"_id": poll_id},
+                    {"$pull": {f"options.{opt_idx}.votes": user_id}}
+                )
+        # Add new vote
+        await polls.update_one(
+            {"_id": poll_id},
+            {"$addToSet": {f"options.{option_index}.votes": user_id}}
+        )
+
+    async def get_poll(self, poll_id):
+        polls = await self.get_collection("polls")
+        return await polls.find_one({"_id": poll_id})
+
+    async def close_poll(self, poll_id):
+        polls = await self.get_collection("polls")
+        await polls.update_one({"_id": poll_id}, {"$set": {"active": False}})
+
+    # Todo Lists (per user)
+    async def add_todo(self, user_id: int, task: str):
+        todos = await self.get_collection("todos")
+        await todos.insert_one({
+            "user_id": user_id,
+            "task": task,
+            "done": False,
+            "created_at": time.time()
+        })
+
+    async def get_todos(self, user_id: int):
+        todos = await self.get_collection("todos")
+        cursor = todos.find({"user_id": user_id, "done": False})
+        return [doc async for doc in cursor]
+
+    async def complete_todo(self, user_id: int, task_index: int):
+        todos = await self.get_collection("todos")
+        user_todos = await self.get_todos(user_id)
+        if 0 <= task_index < len(user_todos):
+            await todos.update_one(
+                {"_id": user_todos[task_index]["_id"]},
+                {"$set": {"done": True}}
+            )
+            return True
+        return False
+
+    async def clear_todos(self, user_id: int):
+        todos = await self.get_collection("todos")
+        await todos.delete_many({"user_id": user_id})
+
+    # Filter Stats
+    async def increment_filter_stats(self, chat_id: int, filter_name: str):
+        stats = await self.get_collection("filter_stats")
+        await stats.update_one(
+            {"chat_id": chat_id, "filter": filter_name},
+            {"$inc": {"hits": 1}, "$set": {"last_hit": time.time()}},
+            upsert=True
+        )
+
+    async def get_filter_stats(self, chat_id: int):
+        stats = await self.get_collection("filter_stats")
+        cursor = stats.find({"chat_id": chat_id}).sort("hits", -1)
+        return [doc async for doc in cursor]
+
+    # Game Stats
+    async def update_game_stats(self, user_id: int, game: str, won: bool):
+        users = await self.get_collection("users")
+        field = f"games.{game}"
+        await users.update_one(
+            {"user_id": user_id},
+            {
+                "$inc": {
+                    f"{field}.played": 1,
+                    f"{field}.won": 1 if won else 0
+                }
+            },
+            upsert=True
+        )
+
+    async def get_game_leaderboard(self, game: str, limit: int = 10):
+        users = await self.get_collection("users")
+        cursor = users.find({f"games.{game}.won": {"$exists": True}}).sort(f"games.{game}.won", -1).limit(limit)
+        return [doc async for doc in cursor]
+
+    # AI Moderation
+    async def set_aimod(self, chat_id: int, enabled: bool):
+        settings = await self.get_collection("settings")
+        await settings.update_one(
+            {"chat_id": chat_id},
+            {"$set": {"aimod.enabled": enabled}},
+            upsert=True
+        )
+
+    async def set_aimod_sensitivity(self, chat_id: int, level: str):
+        settings = await self.get_collection("settings")
+        await settings.update_one(
+            {"chat_id": chat_id},
+            {"$set": {"aimod.sensitivity": level}},
+            upsert=True
+        )
+
+    async def get_aimod_settings(self, chat_id: int):
+        settings = await self.get_chat_settings(chat_id)
+        return settings.get("aimod", {"enabled": False, "sensitivity": "medium"})
+
+    # Temp Actions (for temp bans/mutes)
+    async def add_temp_action(self, chat_id: int, user_id: int, action_type: str, expires_at: float):
+        temp_actions = await self.get_collection("temp_actions")
+        await temp_actions.update_one(
+            {"chat_id": chat_id, "user_id": user_id, "type": action_type},
+            {"$set": {"expires_at": expires_at}},
+            upsert=True
+        )
+
+    # Multi-language
+    async def set_user_language(self, user_id: int, lang: str):
+        users = await self.get_collection("users")
+        await users.update_one(
+            {"user_id": user_id},
+            {"$set": {"language": lang}},
+            upsert=True
+        )
+
+    async def get_user_language(self, user_id: int):
+        user = await self.get_user_data(user_id)
+        return user.get("language", "en") if user else "en"
+
+    async def set_chat_language(self, chat_id: int, lang: str):
+        settings = await self.get_collection("settings")
+        await settings.update_one(
+            {"chat_id": chat_id},
+            {"$set": {"language": lang}},
+            upsert=True
+        )
+
+    async def get_chat_language(self, chat_id: int):
+        settings = await self.get_chat_settings(chat_id)
+        return settings.get("language", "en")
+
+    # Analytics Export
+    async def export_chat_analytics(self, chat_id: int):
+        """Export chat analytics as JSON-serializable dict"""
+        analytics = await self.get_collection("analytics")
+        logs = await self.get_collection("audit_logs")
+        
+        # Get analytics data
+        daily_cursor = analytics.find({"type": "daily"}).sort("key", -1).limit(30)
+        daily = [{"date": d["key"], "messages": d["count"]} async for d in daily_cursor]
+        
+        # Get logs
+        log_cursor = logs.find({"chat_id": chat_id}).sort("timestamp", -1).limit(100)
+        audit_logs = []
+        async for log in log_cursor:
+            audit_logs.append({
+                "action": log["action"],
+                "user_id": log.get("user_id"),
+                "target_id": log.get("target_id"),
+                "details": log.get("details"),
+                "timestamp": log["timestamp"]
+            })
+        
+        return {
+            "chat_id": chat_id,
+            "daily_activity": daily,
+            "audit_logs": audit_logs
+        }
+
 db = MongoDB()
