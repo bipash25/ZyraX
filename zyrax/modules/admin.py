@@ -4,6 +4,7 @@ from pyrogram.enums import ChatMemberStatus
 from zyrax.utils.decorators import require_admin
 from zyrax.utils.errors import error_handler
 from zyrax.utils.users import extract_user
+from zyrax.database.mongo import db
 
 __mod_name__ = "Admin"
 __help__ = """
@@ -60,6 +61,7 @@ async def promote(client: Client, message: Message):
             pass
             
         await message.reply_text(f"Promoted {user_mention} with title **{title}**.")
+        await db.log_admin_action("promote", client.me.id, message.chat.id, user_id, f"Title: {title}")
     except Exception as e:
         await message.reply_text(f"Failed to promote: {str(e)}")
 
@@ -97,6 +99,7 @@ async def demote(client: Client, message: Message):
             pass
             
         await message.reply_text(f"Demoted {user_mention}.")
+        await db.log_admin_action("demote", client.me.id, message.chat.id, user_id)
     except Exception as e:
         await message.reply_text(f"Failed to demote: {str(e)}")
 

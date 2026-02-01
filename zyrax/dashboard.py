@@ -20,6 +20,20 @@ async def home(request: Request):
     stats = await db.get_stats()
     return templates.TemplateResponse("index.html", {"request": request, "stats": stats})
 
+@app.get("/logs", response_class=HTMLResponse)
+async def logs(request: Request):
+    from zyrax.database.mongo import db
+    logs = await db.get_audit_logs(limit=50)
+    # Convert timestamps to readable format if needed in template or here
+    # Assuming template handles it or we pass a helper
+    return templates.TemplateResponse("logs.html", {"request": request, "logs": logs})
+
+@app.get("/analytics", response_class=HTMLResponse)
+async def analytics(request: Request):
+    from zyrax.database.mongo import db
+    data = await db.get_activity_stats()
+    return templates.TemplateResponse("analytics.html", {"request": request, "data": data})
+
 @app.get("/stats", response_class=HTMLResponse)
 async def stats(request: Request):
     return templates.TemplateResponse("stats.html", {"request": request})

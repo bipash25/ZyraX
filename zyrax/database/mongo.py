@@ -494,4 +494,126 @@ class MongoDB:
         doc = await settings.find_one({"chat_id": chat_id})
         return doc.get("rules") if doc else None
 
+    # Logging & Analytics
+    async def log_admin_action(self, action: str, user_id: int, chat_id: int, target_id: int = None, details: str = None):
+        logs = await self.get_collection("audit_logs")
+        await logs.insert_one({
+            "action": action,
+            "user_id": user_id,
+            "chat_id": chat_id,
+            "target_id": target_id,
+            "details": details,
+            "timestamp": time.time()
+        })
+
+    async def get_audit_logs(self, limit: int = 50):
+        logs = await self.get_collection("audit_logs")
+        cursor = logs.find().sort("timestamp", -1).limit(limit)
+        return [doc async for doc in cursor]
+
+    async def track_activity(self, user_id: int, chat_id: int):
+        # 1. Increment total messages for User
+        # 2. Increment total messages for Chat
+        # 3. Aggregation data (e.g. hourly bucket) - Simplified for MVP
+        
+        users = await self.get_collection("users")
+        chats = await self.get_collection("chats")
+        
+        # User activity
+        await users.update_one(
+            {"user_id": user_id},
+            {"$inc": {"msg_count": 1}, "$set": {"last_active": time.time()}},
+            upsert=True
+        )
+        
+        # Chat activity
+        await chats.update_one(
+            {"chat_id": chat_id},
+            {"$inc": {"msg_count": 1}, "$set": {"last_active": time.time()}},
+            upsert=True
+        )
+        
+        # Heatmap Data (Stored in separate collection for analytics)
+        # Key: "YYYY-MM-DD-HH"
+        analytics = await self.get_collection("analytics")
+        hour_key = time.strftime("%Y-%m-%d-%H")
+        day_key = time.strftime("%Y-%m-%d")
+        
+        await analytics.update_one(
+            {"key": hour_key, "type": "hourly"},
+            {"$inc": {"count": 1}},
+            upsert=True
+        )
+        
+        await analytics.update_one(
+            {"key": day_key, "type": "daily"},
+            {"$inc": {"count": 1}},
+            upsert=True
+        )
+
+    async def get_activity_stats(self):
+        analytics = await self.get_collection("analytics")
+        
+        # Get last 7 days
+        cursor = analytics.find({"type": "daily"}).sort("key", -1).limit(7)
+        daily_data = [doc async for doc in cursor]
+        
+        # Get last 24 hours
+        cursor = analytics.find({"type": "hourly"}).sort("key", -1).limit(24)
+        hourly_data = [doc async for doc in cursor]
+        
+        return {
+            "daily": sorted(daily_data, key=lambda x: x["key"]),
+            "hourly": sorted(hourly_data, key=lambda x: x["key"])
+        }
+
+    # RSS
+    async def add_rss(self, chat_id: int, url: str):
+        settings = await self.get_collection("settings")
+        await settings.update_one(
+            {"chat_id": chat_id},
+            {"$addToSet": {"rss_feeds": url}},
+            upsert=True
+        )
+
+    async def get_chat_rss(self, chat_id: int):
+        settings = await self.get_collection("settings")
+        doc = await settings.find_one({"chat_id": chat_id})
+        return doc.get("rss_feeds", []) if doc else []
+
+    async def remove_rss(self, chat_id: int, url: str):
+        settings = await self.get_collection("settings")
+        await settings.update_one(
+            {"chat_id": chat_id},
+            {"$pull": {"rss_feeds": url}}
+        )
+
+    async def get_chat_settings(self, chat_id: int):
+        settings = await self.get_collection("settings")
+        doc = await settings.find_one({"chat_id": chat_id})
+        return doc if doc else {}
+
+    # Privacy / GDPR
+    async def get_user_full_data(self, user_id: int):
+        data = {}
+        users = await self.get_collection("users")
+        warnings = await self.get_collection("warnings")
+        
+        # Profile
+        data["profile"] = await users.find_one({"user_id": user_id})
+        
+        # Warnings
+        # Find all documents in warnings where user_id matches
+        warn_cursor = warnings.find({"user_id": user_id})
+        data["warnings"] = [doc async for doc in warn_cursor]
+        
+        return data
+
+    async def delete_user_data(self, user_id: int):
+        users = await self.get_collection("users")
+        warnings = await self.get_collection("warnings")
+        
+        await users.delete_one({"user_id": user_id})
+        await warnings.delete_many({"user_id": user_id})
+
 db = MongoDB()

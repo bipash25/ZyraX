@@ -39,6 +39,9 @@ try:
     import zyrax.modules.notes
     import zyrax.modules.filters
     import zyrax.modules.karma
+    import zyrax.modules.music
+    import zyrax.modules.ai
+    import zyrax.modules.automation
     import zyrax.modules.notes
     import zyrax.modules.filters
     import zyrax.modules.antiflood

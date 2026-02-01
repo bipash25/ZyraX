@@ -14,3 +14,6 @@ python-multipart
 aiofiles
 Pillow
 yt-dlp
+google-generativeai
+py-tgcalls
+feedparser

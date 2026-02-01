@@ -24,7 +24,9 @@ async def new_fed(client: Client, message: Message):
     
     success = await db.create_fed(message.from_user.id, name, fed_id)
     if success:
-        await message.reply_text(f"Created federation '{name}' with ID: `{fed_id}`")
+        # Auto-join creator's chat to the new fed
+        await db.join_fed(fed_id, message.chat.id)
+        await message.reply_text(f"Created federation '{name}' with ID: `{fed_id}`\nThis chat has joined the federation.")
     else:
         await message.reply_text("Federation name already exists.")
 

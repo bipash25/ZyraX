@@ -5,6 +5,7 @@ from zyrax.utils.errors import error_handler
 from zyrax.utils.ratelimit import rate_limit
 from zyrax.utils.time_parser import parse_duration
 from zyrax.utils.users import extract_user
+from zyrax.database.mongo import db
 import time
 from datetime import datetime, timedelta
 
@@ -35,6 +36,7 @@ async def ban_user(client: Client, message: Message):
     try:
         await client.ban_chat_member(message.chat.id, user_id)
         await message.reply_text(f"Banned {user_mention}.")
+        await db.log_admin_action("ban", client.me.id, message.chat.id, user_id)
     except Exception as e:
         await message.reply_text(f"Failed to ban: {str(e)}")
 
@@ -52,6 +54,7 @@ async def unban_user(client: Client, message: Message):
     try:
         await client.unban_chat_member(message.chat.id, user_id)
         await message.reply_text(f"Unbanned {user_mention}.")
+        await db.log_admin_action("unban", client.me.id, message.chat.id, user_id)
     except Exception as e:
         await message.reply_text(f"Failed to unban: {str(e)}")
 
@@ -71,6 +74,7 @@ async def kick_user(client: Client, message: Message):
         await client.ban_chat_member(message.chat.id, user_id)
         await client.unban_chat_member(message.chat.id, user_id)
         await message.reply_text(f"Kicked {user_mention}.")
+        await db.log_admin_action("kick", client.me.id, message.chat.id, user_id)
     except Exception as e:
         await message.reply_text(f"Failed to kick: {str(e)}")
 
@@ -89,6 +93,7 @@ async def mute_user(client: Client, message: Message):
         # Mute indefinitely
         await client.restrict_chat_member(message.chat.id, user_id, ChatPermissions())
         await message.reply_text(f"Muted {user_mention}.")
+        await db.log_admin_action("mute", client.me.id, message.chat.id, user_id)
     except Exception as e:
         await message.reply_text(f"Failed to mute: {str(e)}")
 
@@ -120,6 +125,7 @@ async def unmute_user(client: Client, message: Message):
             )
         )
         await message.reply_text(f"Unmuted {user_mention}.")
+        await db.log_admin_action("unmute", client.me.id, message.chat.id, user_id)
     except Exception as e:
         await message.reply_text(f"Failed to unmute: {str(e)}")
 
@@ -162,6 +168,7 @@ async def tban_user(client: Client, message: Message):
     try:
         await client.ban_chat_member(message.chat.id, user_id, until_date=until_date)
         await message.reply_text(f"Banned {user.mention} for {message.command[1]}.")
+        await db.log_admin_action("tban", client.me.id, message.chat.id, user_id, f"Duration: {message.command[1]}")
     except Exception as e:
         await message.reply_text(f"Failed to ban: {str(e)}")
 
@@ -199,6 +206,7 @@ async def tmute_user(client: Client, message: Message):
             until_date=until_date
         )
         await message.reply_text(f"Muted {user.mention} for {message.command[1]}.")
+        await db.log_admin_action("tmute", client.me.id, message.chat.id, user.id, f"Duration: {message.command[1]}")
     except Exception as e:
         await message.reply_text(f"Failed to mute: {str(e)}")
 
@@ -217,5 +225,6 @@ async def sban_user(client: Client, message: Message):
         await client.ban_chat_member(message.chat.id, user_id)
         await client.unban_chat_member(message.chat.id, user_id)
         await message.reply_text(f"Soft banned {user_mention} (messages deleted).")
+        await db.log_admin_action("sban", client.me.id, message.chat.id, user_id)
     except Exception as e:
         await message.reply_text(f"Failed to soft ban: {str(e)}")

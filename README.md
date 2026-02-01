@@ -1,172 +1,121 @@
-# ZyraX 🌌
+# ZyraX 🚀
 
-**ZyraX** is a powerful, modular, and asynchronous Telegram Bot built with Python and Pyrogram. Designed for scalability, it features a plugin-based architecture allowing it to handle everything from group moderation to AI image generation.
+> A modular, powerful, and secure Telegram bot built with **Pyrogram**, **MongoDB**, and **FastAPI**.
 
-Now features a **Web Dashboard** for real-time analytics and management!
+## 🌟 Features
 
-## 🚀 Features
-
-### 🛡️ Moderation & Administration
-- **Ban/Kick/Mute**: Full user control with `ChatPermissions`.
-- **Warnings**: Database-backed warn system with auto-ban thresholds.
-- **Admin Tools**: Promote/Demote users, Admin lists.
-- **Federations**: Cross-chat ban system (`/fban`) to protect communities.
+### 🛡️ Moderation & Security
+*   **Ban/Kick/Mute:** Robust user management with time duration support (`/tban 1d`).
+*   **Anti-Spam:** CAPTCHA verification for new members (`/captcha`), Blacklist (`/blacklist`), and Anti-Flood.
+*   **Logging:** Comprehensive audit logs for all admin actions.
+*   **Reports:** Users can report messages to admins (`/report`).
 
 ### 🤖 AI & Automation
-- **ChatGPT Integration**: Chat with AI using `/ask`.
-- **Image Generation**: Creates images via DALL-E with `/imagine`.
-- **Filters**: Auto-replies based on keywords (Text & Media).
-- **Notes**: Save and retrieve commonly used messages/media.
-- **Anti-Flood**: Automated spam protection with configurable limits.
+*   **Gemini Integration:** Chat with Google's Gemini AI (`/ask`).
+*   **Auto-Moderation:** AI-powered toxicity detection (using Gemini/OpenAI).
+*   **Image Generation:** Create images with DALL-E (`/imagine`).
+*   **RSS:** Track RSS feeds (`/rss`).
 
-### 📊 Dashboard & Analytics (New!)
-- **Web Interface**: Manage your bot via a beautiful web UI.
-- **Real-Time Stats**: View command usage, active chats, and user growth.
-- **Premium System**: Built-in monetization pages for subscription management.
+### 🎮 Fun & Economy
+*   **Economy:** Earn coins, daily rewards, and transfer funds (`/balance`, `/pay`, `/work`).
+*   **Games:** Trivia (`/trivia`), Number Guessing (`/guess`), Dice, RPS.
+*   **Levels:** XP system with levels and leaderboards (`/rank`, `/top`).
+*   **Fun:** Quotes, Jokes, Memes, Urban Dictionary.
 
-### 🎮 Fun & Tournaments
-- **Tournament System**: Create and manage bracket-style tournaments automatically.
-- **Games**: Interactive Dice, Darts, RPS.
-- **Entertainment**: Meme and Joke generators.
+### 🎵 Media & Utilities
+*   **Music Player:** Stream high-quality audio (`/play`).
+*   **Tools:** Weather, IP Lookup, Sticker Converter, Video Downloader (`/dl`).
 
-### 🔌 Connectivity
-- **Bridge**: Built-in Webhook receiver for external integrations (GitHub, Trello scripts).
-- **Dynamic Loading**: Hot-pluggable modules with auto-discovery.
+### 📊 Dashboard
+*   **Web Interface:** Real-time statistics and logs.
+*   **Analytics:** Hourly/Daily activity charts.
 
-## 🛠️ Tech Stack
-- **Language**: Python 3.11+
-- **Framework**: [Pyrogram](https://docs.pyrogram.org/) (MTProto)
-- **Web**: FastAPI + Jinja2 + TailwindCSS
-- **Database**: MongoDB (Motor Async Driver) + Redis (Caching)
-- **Deployment**: Docker & Docker Compose
-
----
-
-## 📦 Installation Guide
+## 🚀 Deployment
 
 ### Prerequisites
-Before you begin, ensure you have usage access to:
-1.  **Python 3.11+**: [Download Here](https://www.python.org/downloads/)
-2.  **MongoDB**: [Community Server](https://www.mongodb.com/try/download/community) or [MongoDB Atlas](https://www.mongodb.com/atlas) (Cloud).
-3.  **Redis**: [Redis.io](https://redis.io/download) (For caching & stats).
-4.  **Telegram API**: Get `API_ID` and `API_HASH` from [my.telegram.org](https://my.telegram.org).
-5.  **Bot Token**: Get it from [@BotFather](https://t.me/BotFather).
+*   Docker & Docker Compose
+*   Telegram API ID & Hash
+*   Bot Token
+*   MongoDB & Redis (handled by Docker)
 
----
+### Installation
 
-### Windows Tutorial 🪟
-
-1.  **Clone the Repository**
-    Open PowerShell or Command Prompt:
-    ```powershell
-    git clone https://github.com/bipash25/ZyraX.git
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/yourusername/ZyraX.git
     cd ZyraX
     ```
 
-2.  **Create Virtual Environment**
-    It's recommended to use a virtual environment:
-    ```powershell
-    python -m venv venv
-    .\venv\Scripts\Activate
-    ```
-
-3.  **Install Dependencies**
-    ```powershell
-    pip install -r requirements.txt
-    ```
-
-4.  **Configuration**
-    Copy the sample config:
-    ```powershell
-    copy .env.sample .env
-    ```
-    Open `.env` in Notepad (or VS Code) and fill in your details:
+2.  **Configure Environment:**
+    Create a `.env` file based on `.env.example`:
     ```env
-    API_ID=123456
+    API_ID=your_api_id
     API_HASH=your_api_hash
-    BOT_TOKEN=123:ABC...
-    MONGO_URL=mongodb://localhost:27017
-    REDIS_URL=redis://localhost:6379
-    OPENAI_API_KEY=sk-... (Optional)
-    OWNER_ID=123456789
+    BOT_TOKEN=your_bot_token
+    MONGO_URL=mongodb://mongo:27017
+    REDIS_URL=redis://redis:6379
+    OWNER_ID=your_id
+    OPENAI_API_KEY=optional_key
+    GEMINI_API_KEYS=key1,key2
     ```
 
-5.  **Run the Bot**
-    ```powershell
-    python -m zyrax
-    ```
-    *The bot will start, and the Dashboard will be live at `http://localhost:8080`.*
-
----
-
-### macOS / Linux Tutorial 🐧
-
-1.  **Clone the Repository**
-    Open Terminal:
+3.  **Run with Docker:**
     ```bash
-    git clone https://github.com/bipash25/ZyraX.git
-    cd ZyraX
+    docker-compose up -d --build
     ```
 
-2.  **Create Virtual Environment**
-    ```bash
-    python3 -m venv venv
-    source venv/bin/activate
-    ```
-
-3.  **Install Dependencies**
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-4.  **Configuration**
-    Copy the sample config:
-    ```bash
-    cp .env.sample .env
-    ```
-    Edit `.env` using `nano` or your preferred editor:
-    ```bash
-    nano .env
-    ```
-    Fill in your API credentials (as shown in the Windows section).
-
-5.  **Run the Bot**
-    ```bash
-    python3 -m zyrax
-    ```
-
----
-
-### Option C: Docker (Cross-Platform) 🐳
-
-If you have Docker installed, this is the easiest method.
-
-1.  **Clone and Config**
-    ```bash
-    git clone https://github.com/bipash25/ZyraX.git
-    cd ZyraX
-    mv .env.sample .env
-    # Edit .env with your credentials
-    ```
-
-2.  **Run**
-    ```bash
-    docker-compose up -d
-    ```
+## 📚 Documentation
 
 ## 📝 Commands
-| Module | Command | Description |
-|--------|---------|-------------|
-| **Admin** | `/promote`, `/demote` | Manage admins |
-| **Bans** | `/ban`, `/mute`, `/kick` | User control |
-| **AI** | `/ask`, `/imagine` | AI features |
-| **Tourney**| `/tourney`, `/bracket` | Tournament system |
-| **Feds** | `/newfed`, `/fban` | Federation management |
-| **Notes** | `/save`, `/get` | Saved snippets |
-| **Web** | `http://localhost:8080/` | View Dashboard |
+
+### 🛡️ Admin & Moderation
+*   `/ban`, `/mute`, `/kick`, `/unban`, `/unmute` - User control.
+*   `/tban <time>`, `/tmute <time>` - Temporary ban/mute.
+*   `/promote`, `/demote` - Manage admins.
+*   `/adminlist` - List admins.
+*   `/warn`, `/unwarn`, `/resetwarns` - Warning system.
+*   `/blacklist` - Manage banned words.
+*   `/captcha [on/off]` - Toggle join verification.
+*   `/setflood` - Configure anti-flood.
+
+### 🤖 AI & Automation
+*   `/ask <query>` - Chat with Gemini AI.
+*   `/imagine <prompt>` - Generate images (DALL-E).
+*   `/rss add <url>` - Subscribe to RSS feeds.
+*   `/tr <lang> <text>` - Translate text.
+
+### 🎮 Economy & Games
+*   `/balance`, `/daily`, `/work` - Economy basics.
+*   `/pay <user> <amount>` - Transfer coins.
+*   `/rich` - Leaderboard.
+*   `/trivia` - Play trivia.
+*   `/guess` - Number guessing game.
+*   `/dice`, `/dart`, `/rps` - Telegram games.
+
+### 🎵 Media & Fun
+*   `/play <song>` - Play music in voice chat.
+*   `/stop`, `/skip`, `/pause`, `/resume` - Music controls.
+*   `/dl <url>` - Download video/audio from social media.
+*   `/tosticker` - Convert image to sticker.
+*   `/quote`, `/joke`, `/meme` - Fun content.
+*   `/weather <city>`, `/ip <addr>` - Utilities.
+
+### ⚙️ Settings
+*   `/setwelcome`, `/setgoodbye` - Custom greetings.
+*   `/welcomemode <text/image>` - Toggle image welcome.
+*   `/newfed`, `/joinfed`, `/fban` - Federation management.
+*   `/save`, `/get`, `/notes` - Notes system.
+*   `/filter`, `/stop` - Auto-reply filters.
+
+## 🔒 Privacy & GDPR
+
+*   **Export Data:** Use `/mydata` to get a JSON export of your stored data.
+*   **Delete Data:** Use `/deletedata` to permanently purge your data.
 
 ## 🤝 Contributing
-Contributions are welcome! This project uses a modular design—simply add a new `.py` file to `zyrax/modules/` with `__mod_name__` and `__help__` variables, and it will load automatically.
+
+Contributions are welcome! Please fork the repository and submit a pull request.
 
 ## 📄 License
-This project is licensed under the MIT License.
+
+MIT License

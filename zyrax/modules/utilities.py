@@ -3,6 +3,11 @@ import time
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from zyrax.utils.errors import error_handler
+from zyrax.config import Config
+import google.generativeai as genai
+import random
+import asyncio
+from functools import partial
 
 __mod_name__ = "Utilities"
 __help__ = """
@@ -11,7 +16,7 @@ __help__ = """
 /ip <ip/domain> - Get IP/DNS info
 /bin <bin> - Get BIN info
 /time <timezone> - Get current time in a timezone
-/tr <lang> <text> - Translate text (e.g. /tr en Hola)
+/tr <lang> <text> - Translate text (e.g. /tr es Hello)
 """
 
 async def fetch_json(url):
@@ -113,9 +118,40 @@ async def world_time(client: Client, message: Message):
     else:
          await message.reply_text("Timezone not found. Try format: Area/City (e.g. Europe/London)")
 
+def translate_gemini(text: str, target_lang: str):
+    if not Config.GEMINI_API_KEYS:
+        return "No Gemini API Keys configured."
+        
+    try:
+        api_key = random.choice(Config.GEMINI_API_KEYS)
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-pro')
+        
+        prompt = f"Translate the following text to {target_lang}. Only provide the translation, no extra text. Text: \"{text}\""
+        
+        response = model.generate_content(prompt)
+        return response.text.strip()
+    except Exception as e:
+        return f"Translation Error: {e}"
+
 @Client.on_message(filters.command(["tr", "translate"]) & filters.group)
 async def translate(client: Client, message: Message):
-    # Basic Google Translate workaround or similar open API
-    # Since free unlimited APIs are rare without key, we can use a library or a public instance of libretranslate
-    # For now, let's use a placeholder message as reliable free translation requires a key or scraping
-    await message.reply_text("Translation feature coming soon (API pending).")
+    if len(message.command) < 3 and not message.reply_to_message:
+        return await message.reply_text("Usage: /tr <lang> <text> or reply with /tr <lang>")
+        
+    target_lang = message.command[1]
+    
+    if message.reply_to_message:
+        text = message.reply_to_message.text or message.reply_to_message.caption
+        if not text:
+            return await message.reply_text("No text to translate.")
+    else:
+        text = " ".join(message.command[2:])
+        
+    msg = await message.reply_text("Translating...")
+    
+    # Run in executor
+    loop = asyncio.get_running_loop()
+    result = await loop.run_in_executor(None, partial(translate_gemini, text, target_lang))
+    
+    await msg.edit_text(f"**Translated ({target_lang}):**\n\n{result}")

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
+    <h2 class="text-xl font-bold mb-4">Activity Analytics</h2>
+    
+    <!-- Charts Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Daily Activity -->
+        <div class="bg-gray-700 p-4 rounded-lg">
+            <h3 class="text-gray-300 mb-2">Daily Messages</h3>
+            <canvas id="dailyChart"></canvas>
+        </div>
+        
+        <!-- Hourly Heatmap (Simplified as Line/Bar for now) -->
+        <div class="bg-gray-700 p-4 rounded-lg">
+            <h3 class="text-gray-300 mb-2">Hourly Activity (Last 24h)</h3>
+            <canvas id="hourlyChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Prepare Data
+    const dailyData = {{ data.daily | tojson }};
+    const hourlyData = {{ data.hourly | tojson }};
+    
+    // Daily Chart
+    new Chart(document.getElementById('dailyChart'), {
+        type: 'line',
+        data: {
+            labels: dailyData.map(d => d.key),
+            datasets: [{
+                label: 'Messages',
+                data: dailyData.map(d => d.count),
+                borderColor: '#10B981',
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { labels: { color: 'white' } } },
+            scales: {
+                y: { ticks: { color: '#9CA3AF' } },
+                x: { ticks: { color: '#9CA3AF' } }
+            }
+        }
+    });
+
+    // Hourly Chart
+    new Chart(document.getElementById('hourlyChart'), {
+        type: 'bar',
+        data: {
+            labels: hourlyData.map(d => d.key.split('-')[3] + ':00'), // Extract Hour
+            datasets: [{
+                label: 'Messages',
+                data: hourlyData.map(d => d.count),
+                backgroundColor: '#8B5CF6'
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { labels: { color: 'white' } } },
+            scales: {
+                y: { ticks: { color: '#9CA3AF' } },
+                x: { ticks: { color: '#9CA3AF' } }
+            }
+        }
+    });
+</script>
+{% endblock %}

@@ -34,6 +34,7 @@ async def warn_user(client: Client, message: Message):
     count = await db.add_warn(message.chat.id, user_id, reason)
     
     await message.reply_text(f"Warned {user_mention}. Count: {count}")
+    await db.log_admin_action("warn", client.me.id, message.chat.id, user_id, f"Reason: {reason}, Count: {count}")
     
     # Check for max warns (hardcoded to 3 for now, make configurable later)
     if count >= 3:
@@ -41,6 +42,7 @@ async def warn_user(client: Client, message: Message):
             await client.ban_chat_member(message.chat.id, user_id)
             await message.reply_text(f"{user_mention} has lived their life! (3/3 warns => Banned)")
             await db.reset_warns(message.chat.id, user_id)
+            await db.log_admin_action("ban", client.me.id, message.chat.id, user_id, "Max Warnings Reached")
         except Exception as e:
             await message.reply_text(f"Failed to ban: {e}")
 
@@ -58,6 +60,7 @@ async def remove_warn(client: Client, message: Message):
     count = await db.remove_warn(message.chat.id, user_id)
     
     await message.reply_text(f"Removed warn for {user_mention}. Current count: {count}")
+    await db.log_admin_action("unwarn", client.me.id, message.chat.id, user_id)
 
 @Client.on_message(filters.command("resetwarns") & filters.group)
 @require_admin()
@@ -71,3 +74,4 @@ async def reset_warns(client: Client, message: Message):
 
     await db.reset_warns(message.chat.id, user_id)
     await message.reply_text(f"Reset all warns for {user_mention}.")
+    await db.log_admin_action("resetwarns", client.me.id, message.chat.id, user_id)

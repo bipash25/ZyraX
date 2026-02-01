@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
+    <h2 class="text-xl font-bold mb-4">Admin Audit Logs</h2>
+    <div class="overflow-x-auto">
+        <table class="min-w-full text-left text-sm">
+            <thead class="bg-gray-700 text-gray-300 uppercase">
+                <tr>
+                    <th class="px-4 py-2">Action</th>
+                    <th class="px-4 py-2">Admin ID</th>
+                    <th class="px-4 py-2">Target ID</th>
+                    <th class="px-4 py-2">Details</th>
+                    <th class="px-4 py-2">Timestamp</th>
+                </tr>
+            </thead>
+            <tbody class="text-gray-400">
+                {% for log in logs %}
+                <tr class="border-b border-gray-700 hover:bg-gray-750">
+                    <td class="px-4 py-2 font-semibold 
+                        {% if 'ban' in log.action %}text-red-400{% elif 'promote' in log.action %}text-green-400{% else %}text-blue-400{% endif %}">
+                        {{ log.action }}
+                    </td>
+                    <td class="px-4 py-2">{{ log.user_id }}</td>
+                    <td class="px-4 py-2">{{ log.target_id }}</td>
+                    <td class="px-4 py-2">{{ log.details or '-' }}</td>
+                    <td class="px-4 py-2">{{ log.timestamp }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
