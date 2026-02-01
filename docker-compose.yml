@@ -1,32 +1,74 @@
-
+version: '3.8'
 
 services:
   zyrax:
     build: .
     container_name: zyrax_bot
-    restart: always
-    env_file:
-      - .env
     depends_on:
       - mongo
       - redis
-    environment:
-      - MONGO_URL=mongodb://mongo:27017
-      - REDIS_URL=redis://redis:6379
+    env_file:
+      - .env
+    volumes:
+      - ./zyrax:/app/zyrax
+      - ./logs:/app/logs
+    restart: always
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - zyrax_net
 
   mongo:
     image: mongo:latest
     container_name: zyrax_mongo
-    restart: always
     volumes:
       - mongo_data:/data/db
+    restart: always
+    networks:
+      - zyrax_net
 
   redis:
     image: redis:7-alpine
     container_name: zyrax_redis
-    restart: always
     volumes:
       - redis_data:/data
+    restart: always
+    networks:
+      - zyrax_net
+
+  nginx:
+    image: nginx:latest
+    container_name: zyrax_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deployment/nginx/conf.d:/etc/nginx/conf.d
+      - ./deployment/certbot/conf:/etc/letsencrypt
+      - ./deployment/certbot/www:/var/www/certbot
+    depends_on:
+      - zyrax
+    restart: always
+    networks:
+      - zyrax_net
+
+  certbot:
+    image: certbot/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    volumes:
+      - ./deployment/certbot/conf:/etc/letsencrypt
+      - ./deployment/certbot/www:/var/www/certbot
+    networks:
+      - zyrax_net
+
+networks:
+  zyrax_net:
+    driver: bridge
 
 volumes:
   mongo_data:

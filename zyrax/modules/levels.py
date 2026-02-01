@@ -46,8 +46,13 @@ async def xp_handler(client: Client, message: Message):
     import random
     xp_gain = random.randint(5, 15)
     
+    # Debug log
+    # print(f"Granting {xp_gain} XP to {user_id}") 
+    
     # Register/Update user
-    await db.register_user(user_id, message.from_user.username or message.from_user.first_name)
+    # Ensure username is captured even if None
+    username = message.from_user.username or message.from_user.first_name or "Unknown"
+    await db.register_user(user_id, username)
     await db.add_xp(user_id, xp_gain)
     
     # Check level up
@@ -72,6 +77,7 @@ async def xp_handler(client: Client, message: Message):
 
 @Client.on_message(filters.command("rank"))
 async def rank_command(client: Client, message: Message):
+    # Allow PM usage
     user = message.from_user
     if len(message.command) > 1:
         # TODO: Get other user logic
@@ -95,6 +101,7 @@ async def rank_command(client: Client, message: Message):
 
 @Client.on_message(filters.command("top"))
 async def leaderboard(client: Client, message: Message):
+    # Allow PM usage
     top_users = await db.get_top_users(limit=10, sort_by="xp")
     text = "🏆 **Global XP Leaderboard**\n\n"
     

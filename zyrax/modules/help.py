@@ -8,15 +8,16 @@ __help__ = """
 /help <module> - Show help for a specific module
 """
 
-@Client.on_message(filters.command("help") & filters.group)
+@Client.on_message(filters.command(["help", "start"]))
 async def help_command(client: Client, message: Message):
-    if len(message.command) > 1:
+    if len(message.command) > 1 and message.command[0] == "help":
         module_name = message.text.split(None, 1)[1].title()
         if module_name in MOD_HELP:
             await message.reply_text(f"**Help for {module_name}:**\n{MOD_HELP[module_name]}")
         else:
             await message.reply_text("Module not found.")
     else:
+        # Start or plain help
         buttons = []
         for mod in sorted(MOD_HELP.keys()):
             buttons.append(InlineKeyboardButton(mod, callback_data=f"help_mod_{mod}"))
@@ -24,10 +25,21 @@ async def help_command(client: Client, message: Message):
         # Chunk buttons into rows of 3
         keyboard = [buttons[i:i + 3] for i in range(0, len(buttons), 3)]
         
+        # Add a "Close" button
+        keyboard.append([InlineKeyboardButton("Close", callback_data="help_close")])
+        
+        text = "**ZyraX Help Menu**\nSelect a module to view help:"
+        if message.chat.type != "private":
+            text += "\n(Check PM for more details if needed)"
+            
         await message.reply_text(
-            "**ZyraX Help Menu**\nSelect a module to view help:",
+            text,
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
+
+@Client.on_callback_query(filters.regex(r"help_close"))
+async def help_close(client: Client, callback_query: CallbackQuery):
+    await callback_query.message.delete()
 
 @Client.on_callback_query(filters.regex(r"help_mod_(.*)"))
 async def help_callback(client: Client, callback_query: CallbackQuery):

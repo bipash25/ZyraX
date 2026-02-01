@@ -24,10 +24,21 @@ try:
     # Import modules
     import zyrax.modules.admin
     import zyrax.modules.bans
-    import zyrax.modules.greetings
+    import zyrax.modules.welcome
     import zyrax.modules.warnings
-    import zyrax.modules.users
+    import zyrax.modules.userinfo
+    import zyrax.modules.captcha
+    import zyrax.modules.blacklist
+    import zyrax.modules.reports
     import zyrax.modules.utilities
+    import zyrax.modules.fun
+    import zyrax.modules.media
+    import zyrax.modules.economy
+    import zyrax.modules.games
+    import zyrax.modules.levels
+    import zyrax.modules.notes
+    import zyrax.modules.filters
+    import zyrax.modules.karma
     import zyrax.modules.notes
     import zyrax.modules.filters
     import zyrax.modules.antiflood

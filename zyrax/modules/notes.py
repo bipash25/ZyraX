@@ -1,66 +1,29 @@
 from pyrogram import Client, filters
-from pyrogram.types import Message
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from zyrax.utils.decorators import require_admin
 from zyrax.database.mongo import db
 from zyrax.utils.validators import InputValidator
+from zyrax.utils.formatting import format_text, parse_buttons
 
 __mod_name__ = "Notes"
 __help__ = """
 /save <notename> - Save a note (reply to message)
+/privatesave <notename> - Save a note that answers in PM
 /get <notename> - Get a note
 /clear <notename> - Delete a note
 /notes - List all notes
+#notename - Retrieve a note
 """
 
-@Client.on_message(filters.command("save") & filters.group)
-@require_admin()
-async def save_note(client: Client, message: Message):
-    if len(message.command) < 2:
-        return await message.reply_text("Usage: /save <notename> (reply to message or provide text)")
-    
-    note_name = InputValidator.sanitize_text(message.command[1].lower())
-    
-    # Check if reply or text
+async def extract_content(message):
+    data = {}
     if message.reply_to_message:
-        # Saving a message (media or text)
-        # For simplicity, we'll store the message ID and rely on Pyrogram to copy it later
-        # OR better, store file_id and content.
-        # Simplest approach for "copy" is just storing the message ID if it's not going to be deleted.
-        # But if we want permanence, we should store content.
-        # Pyrogram's `copy_message` is easiest if we assume the message stays.
-        if message.reply_to_message.media:
-            # It's media
-            # This is complex to store fully generically in DB without just pickling or extensive JSONification
-            # Strategy: Store message_id and link it to the chat? No, message might be deleted.
-            # Strategy: Save file_id and caption.
-            data = {
-                "type": "media",
-                "file_id": message.reply_to_message.sticker.file_id if message.reply_to_message.sticker else \
-                           message.reply_to_message.photo.file_id if message.reply_to_message.photo else \
-                           message.reply_to_message.video.file_id if message.reply_to_message.video else \
-                           message.reply_to_message.document.file_id if message.reply_to_message.document else \
-                           message.reply_to_message.voice.file_id if message.reply_to_message.voice else \
-                           message.reply_to_message.audio.file_id if message.reply_to_message.audio else None,
-                "caption": message.reply_to_message.caption or "",
-                 # Store what kind of media it is
-                "media_type": message.reply_to_message.media.value # simple string representation
-            }
-            # Refined strategy: Just use copy_message if possible, but for DB storage of "content", 
-            # let's just support TEXT for now to keep it simple, or simple media.
-            # Best way for robust bots: Use the message.reply_to_message_id and chat_id to copy. 
-            # But if original message is deleted, the note breaks.
-            # For this MVP, let's implement Text + basic File ID.
-            pass # Improving below
-        
-        # Simplified storage logic:
-        # We will iterate attributes to find file_id
         media_msg = message.reply_to_message
-        file_id = None
-        media_type = None
-        
         if media_msg.text:
             data = {"type": "text", "content": media_msg.text}
         else:
+            file_id = None
+            media_type = None
             for attr in ["photo", "video", "audio", "voice", "document", "sticker", "animation"]:
                 val = getattr(media_msg, attr, None)
                 if val:
@@ -75,14 +38,26 @@ async def save_note(client: Client, message: Message):
                     "file_id": file_id,
                     "caption": media_msg.caption or ""
                 }
-            else:
-                return await message.reply_text("Unsupported media type.")
-
     elif len(message.command) > 2:
-        # /save name text content
-        data = {"type": "text", "content": InputValidator.sanitize_text(message.text.split(None, 2)[2])}
-    else:
+        data = {"type": "text", "content": message.text.split(None, 2)[2]}
+    
+    return data
+
+@Client.on_message(filters.command(["save", "privatesave"]) & filters.group)
+@require_admin()
+async def save_note(client: Client, message: Message):
+    if len(message.command) < 2:
+        return await message.reply_text("Usage: /save <notename> (reply to message or provide text)")
+    
+    note_name = InputValidator.sanitize_text(message.command[1].lower())
+    data = await extract_content(message)
+    
+    if not data:
         return await message.reply_text("You need to provide content or reply to a message.")
+    
+    # Check for private save
+    if message.command[0] == "privatesave":
+        data["is_private"] = True
 
     await db.save_note(message.chat.id, note_name, data)
     await message.reply_text(f"Saved note `{note_name}`.")
@@ -97,35 +72,76 @@ async def get_note_cmd(client: Client, message: Message):
 
 @Client.on_message(filters.regex(r"^#(\w+)") & filters.group)
 async def get_note_hashtag(client: Client, message: Message):
+    if not message.matches: return
     note_name = message.matches[0].group(1).lower()
     await send_note(client, message, note_name)
 
 async def send_note(client, message, note_name):
-    note = await db.get_note(message.chat.id, note_name)
-    if not note:
-        return await message.reply_text("Note not found.")
-    
-    data = note["data"]
-    if data["type"] == "text":
-        await message.reply_text(data["content"])
-    elif data["type"] == "media":
-        # Send cached media
-        if data["media_type"] == "photo":
-            await message.reply_photo(data["file_id"], caption=data["caption"])
-        elif data["media_type"] == "video":
-            await message.reply_video(data["file_id"], caption=data["caption"])
-        elif data["media_type"] == "document":
-            await message.reply_document(data["file_id"], caption=data["caption"])
-        elif data["media_type"] == "sticker":
-            await message.reply_sticker(data["file_id"])
-        elif data["media_type"] == "audio":
-            await message.reply_audio(data["file_id"], caption=data["caption"])
-        elif data["media_type"] == "voice":
-            await message.reply_voice(data["file_id"], caption=data["caption"])
-        elif data["media_type"] == "animation":
-            await message.reply_animation(data["file_id"], caption=data["caption"])
+    try:
+        note = await db.get_note(message.chat.id, note_name)
+        if not note:
+            # Debug: Check if note exists with different casing or unescaped?
+            # For now just return
+            return 
+        
+        data = note["data"]
+        is_private = data.get("is_private", False)
+        
+        # Target: PM or Group
+        target_msg = message
+        if is_private:
+            # Try to send PM
+            try:
+                target_chat_id = message.from_user.id
+                # Send notification in group
+                await message.reply_text(f"Sent note `{note_name}` to your PM!", quote=True)
+            except Exception:
+                return await message.reply_text("I can't PM you! Start me first.")
         else:
-            await message.reply_text("Unsupported media type in DB.")
+            target_chat_id = message.chat.id
+
+        # Formatting and Buttons
+        content = data.get("content", "") or data.get("caption", "")
+        
+        # Format text variables
+        formatted_content = await format_text(content, message.from_user, message.chat)
+        
+        # Parse buttons
+        text_final, markup = parse_buttons(formatted_content)
+        
+        try:
+            if data["type"] == "text":
+                await client.send_message(target_chat_id, text_final, reply_markup=markup)
+                
+            elif data["type"] == "media":
+                # Media types
+                media_type = data["media_type"]
+                file_id = data["file_id"]
+                
+                if media_type == "photo":
+                    await client.send_photo(target_chat_id, file_id, caption=text_final, reply_markup=markup)
+                elif media_type == "video":
+                    await client.send_video(target_chat_id, file_id, caption=text_final, reply_markup=markup)
+                elif media_type == "document":
+                    await client.send_document(target_chat_id, file_id, caption=text_final, reply_markup=markup)
+                elif media_type == "sticker":
+                    await client.send_sticker(target_chat_id, file_id, reply_markup=markup)
+                elif media_type == "audio":
+                    await client.send_audio(target_chat_id, file_id, caption=text_final, reply_markup=markup)
+                elif media_type == "voice":
+                    await client.send_voice(target_chat_id, file_id, caption=text_final, reply_markup=markup)
+                elif media_type == "animation":
+                    await client.send_animation(target_chat_id, file_id, caption=text_final, reply_markup=markup)
+                    
+        except Exception as e:
+            # Fallback if PM fails (e.g. user blocked bot)
+            if is_private:
+                 await message.reply_text(f"Failed to send PM: {e}")
+            else:
+                 await message.reply_text(f"Error sending note: {e}")
+                 
+    except Exception as e:
+        await message.reply_text(f"Error in send_note: {e}")
 
 @Client.on_message(filters.command("clear") & filters.group)
 @require_admin()

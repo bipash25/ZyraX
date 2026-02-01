@@ -3,6 +3,10 @@ from pyrogram.types import Message, ChatPermissions
 from zyrax.utils.decorators import require_admin
 from zyrax.utils.errors import error_handler
 from zyrax.utils.ratelimit import rate_limit
+from zyrax.utils.time_parser import parse_duration
+from zyrax.utils.users import extract_user
+import time
+from datetime import datetime, timedelta
 
 __mod_name__ = "Bans"
 __help__ = """
@@ -11,6 +15,9 @@ __help__ = """
 /kick <user> - Kick a user
 /mute <user> - Mute a user
 /unmute <user> - Unmute a user
+/tban <time> <user> - Temporarily ban a user
+/tmute <time> <user> - Temporarily mute a user
+/sban <user> - Soft ban (ban and immediate unban to delete messages)
 """
 
 @Client.on_message(filters.command("ban") & filters.group)
@@ -18,13 +25,16 @@ __help__ = """
 @error_handler
 @require_admin()
 async def ban_user(client: Client, message: Message):
-    if not message.reply_to_message:
-        return await message.reply_text("Reply to a user to ban them.")
+    user = await extract_user(client, message)
+    if not user:
+        return await message.reply_text("Reply to a user or mention them to ban.")
     
-    user_id = message.reply_to_message.from_user.id
+    user_id = user.id if hasattr(user, "id") else user
+    user_mention = user.mention if hasattr(user, "mention") else str(user_id)
+
     try:
         await client.ban_chat_member(message.chat.id, user_id)
-        await message.reply_text(f"Banned {message.reply_to_message.from_user.mention}.")
+        await message.reply_text(f"Banned {user_mention}.")
     except Exception as e:
         await message.reply_text(f"Failed to ban: {str(e)}")
 
@@ -32,13 +42,16 @@ async def ban_user(client: Client, message: Message):
 @error_handler
 @require_admin()
 async def unban_user(client: Client, message: Message):
-    if not message.reply_to_message:
-        return await message.reply_text("Reply to a user to unban them.")
+    user = await extract_user(client, message)
+    if not user:
+        return await message.reply_text("Reply to a user or mention them to unban.")
     
-    user_id = message.reply_to_message.from_user.id
+    user_id = user.id if hasattr(user, "id") else user
+    user_mention = user.mention if hasattr(user, "mention") else str(user_id)
+
     try:
         await client.unban_chat_member(message.chat.id, user_id)
-        await message.reply_text(f"Unbanned {message.reply_to_message.from_user.mention}.")
+        await message.reply_text(f"Unbanned {user_mention}.")
     except Exception as e:
         await message.reply_text(f"Failed to unban: {str(e)}")
 
@@ -47,14 +60,17 @@ async def unban_user(client: Client, message: Message):
 @error_handler
 @require_admin()
 async def kick_user(client: Client, message: Message):
-    if not message.reply_to_message:
-        return await message.reply_text("Reply to a user to kick them.")
+    user = await extract_user(client, message)
+    if not user:
+        return await message.reply_text("Reply to a user or mention them to kick.")
     
-    user_id = message.reply_to_message.from_user.id
+    user_id = user.id if hasattr(user, "id") else user
+    user_mention = user.mention if hasattr(user, "mention") else str(user_id)
+
     try:
         await client.ban_chat_member(message.chat.id, user_id)
         await client.unban_chat_member(message.chat.id, user_id)
-        await message.reply_text(f"Kicked {message.reply_to_message.from_user.mention}.")
+        await message.reply_text(f"Kicked {user_mention}.")
     except Exception as e:
         await message.reply_text(f"Failed to kick: {str(e)}")
 
@@ -62,14 +78,17 @@ async def kick_user(client: Client, message: Message):
 @error_handler
 @require_admin()
 async def mute_user(client: Client, message: Message):
-    if not message.reply_to_message:
-        return await message.reply_text("Reply to a user to mute them.")
+    user = await extract_user(client, message)
+    if not user:
+        return await message.reply_text("Reply to a user or mention them to mute.")
     
-    user_id = message.reply_to_message.from_user.id
+    user_id = user.id if hasattr(user, "id") else user
+    user_mention = user.mention if hasattr(user, "mention") else str(user_id)
+
     try:
         # Mute indefinitely
         await client.restrict_chat_member(message.chat.id, user_id, ChatPermissions())
-        await message.reply_text(f"Muted {message.reply_to_message.from_user.mention}.")
+        await message.reply_text(f"Muted {user_mention}.")
     except Exception as e:
         await message.reply_text(f"Failed to mute: {str(e)}")
 
@@ -77,16 +96,126 @@ async def mute_user(client: Client, message: Message):
 @error_handler
 @require_admin()
 async def unmute_user(client: Client, message: Message):
-    if not message.reply_to_message:
-        return await message.reply_text("Reply to a user to unmute them.")
+    user = await extract_user(client, message)
+    if not user:
+        return await message.reply_text("Reply to a user or mention them to unmute.")
     
-    user_id = message.reply_to_message.from_user.id
+    user_id = user.id if hasattr(user, "id") else user
+    user_mention = user.mention if hasattr(user, "mention") else str(user_id)
+
     try:
-        # Unmute (Give default permissions - hardcoded for now due to lack of ChatPermissions object in args)
-        # Actually better to use ChatPermissions with all True or similar, but typically unban_chat_member lifts restrictions too?
-        # unban_chat_member removes from banned list, but for restricted members it might be different.
-        # Let's try unban_chat_member which usually resets permissions to default for the group.
-        await client.unban_chat_member(message.chat.id, user_id)
-        await message.reply_text(f"Unmuted {message.reply_to_message.from_user.mention}.")
+        # Unmute by giving sending permissions
+        await client.restrict_chat_member(
+            message.chat.id,
+            user_id,
+            ChatPermissions(
+                can_send_messages=True,
+                can_send_media_messages=True,
+                can_send_other_messages=True,
+                can_add_web_page_previews=True,
+                can_send_polls=True,
+                can_change_info=False,
+                can_invite_users=True,
+                can_pin_messages=False
+            )
+        )
+        await message.reply_text(f"Unmuted {user_mention}.")
     except Exception as e:
         await message.reply_text(f"Failed to unmute: {str(e)}")
+
+@Client.on_message(filters.command("tban") & filters.group)
+@error_handler
+@require_admin()
+async def tban_user(client: Client, message: Message):
+    # Args: /tban time user OR /tban user time OR reply /tban time
+    if len(message.command) < 2:
+        return await message.reply_text("Usage: /tban <time> [user]")
+
+    # Check first arg for time
+    duration = parse_duration(message.command[1])
+    target_arg_idx = 2
+    if not duration:
+        # Maybe user provided user first? /tban user time (uncommon but possible)
+        # Or maybe replied?
+        # Let's assume syntax /tban time [user]
+        return await message.reply_text("Invalid time format. Use 10m, 2h, 1d.")
+
+    if message.reply_to_message:
+        user = message.reply_to_message.from_user
+    elif len(message.command) > 2:
+        # Try to get user from 2nd arg
+        # We need to construct a temp message object or modify logic of extract_user to take arg
+        # But extract_user uses message.command[1]. We need to temporarily shift args or query manually
+        try:
+            user = await client.get_users(message.command[2])
+        except:
+            user = None
+    else:
+        return await message.reply_text("Reply to a user or mention them.")
+
+    if not user:
+        return await message.reply_text("User not found.")
+
+    user_id = user.id
+    until_date = datetime.now() + timedelta(seconds=duration)
+    
+    try:
+        await client.ban_chat_member(message.chat.id, user_id, until_date=until_date)
+        await message.reply_text(f"Banned {user.mention} for {message.command[1]}.")
+    except Exception as e:
+        await message.reply_text(f"Failed to ban: {str(e)}")
+
+@Client.on_message(filters.command("tmute") & filters.group)
+@error_handler
+@require_admin()
+async def tmute_user(client: Client, message: Message):
+    if len(message.command) < 2:
+        return await message.reply_text("Usage: /tmute <time> [user]")
+
+    duration = parse_duration(message.command[1])
+    if not duration:
+        return await message.reply_text("Invalid time format.")
+
+    if message.reply_to_message:
+        user = message.reply_to_message.from_user
+    elif len(message.command) > 2:
+        try:
+            user = await client.get_users(message.command[2])
+        except:
+            user = None
+    else:
+        return await message.reply_text("Reply to a user or mention them.")
+
+    if not user:
+        return await message.reply_text("User not found.")
+    
+    until_date = datetime.now() + timedelta(seconds=duration)
+    
+    try:
+        await client.restrict_chat_member(
+            message.chat.id, 
+            user.id, 
+            ChatPermissions(),
+            until_date=until_date
+        )
+        await message.reply_text(f"Muted {user.mention} for {message.command[1]}.")
+    except Exception as e:
+        await message.reply_text(f"Failed to mute: {str(e)}")
+
+@Client.on_message(filters.command("sban") & filters.group)
+@error_handler
+@require_admin()
+async def sban_user(client: Client, message: Message):
+    user = await extract_user(client, message)
+    if not user:
+        return await message.reply_text("Reply to a user or mention them to soft ban.")
+    
+    user_id = user.id if hasattr(user, "id") else user
+    user_mention = user.mention if hasattr(user, "mention") else str(user_id)
+
+    try:
+        await client.ban_chat_member(message.chat.id, user_id)
+        await client.unban_chat_member(message.chat.id, user_id)
+        await message.reply_text(f"Soft banned {user_mention} (messages deleted).")
+    except Exception as e:
+        await message.reply_text(f"Failed to soft ban: {str(e)}")

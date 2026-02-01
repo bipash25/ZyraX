@@ -7,3 +7,6 @@ venv/
 .vscode/
 *.log
 EXECUTION_LOG_FULL.md
+*.session
+*.session-journal
+downloads/

@@ -85,6 +85,10 @@ class MongoDB:
         doc = await notes.find_one({"chat_id": chat_id, "name": name})
         
         if doc:
+            # Convert ObjectId to string to make it serializable for JSON/Cache
+            if "_id" in doc:
+                doc["_id"] = str(doc["_id"])
+            
             await self.cache.set(cache_key, doc, ttl=600)
             return doc
         return None
@@ -370,5 +374,124 @@ class MongoDB:
             {"user_id": user_id},
             {"$set": {"title": title}}
         )
+
+    # Karma
+    async def change_karma(self, user_id: int, amount: int):
+        users = await self.get_collection("users")
+        await users.update_one(
+            {"user_id": user_id},
+            {"$inc": {"karma": amount}},
+            upsert=True
+        )
+        doc = await users.find_one({"user_id": user_id})
+        return doc.get("karma", 0)
+
+    async def get_karma(self, user_id: int):
+        users = await self.get_collection("users")
+        doc = await users.find_one({"user_id": user_id})
+        return doc.get("karma", 0) if doc else 0
+
+    # Welcome / Goodbye / Rules
+    async def set_welcome(self, chat_id: int, content: str = None, type: str = "text", media_id: str = None):
+        """
+        type: 'text' or 'image' (generated) or 'media' (file)
+        """
+        welcomes = await self.get_collection("welcomes")
+        data = {}
+        if content: data["content"] = content
+        if type: data["type"] = type
+        if media_id: data["media_id"] = media_id
+        
+        await welcomes.update_one(
+            {"chat_id": chat_id},
+            {"$set": data},
+            upsert=True
+        )
+
+    async def get_welcome(self, chat_id: int):
+        welcomes = await self.get_collection("welcomes")
+        return await welcomes.find_one({"chat_id": chat_id})
+
+    async def delete_welcome(self, chat_id: int):
+        welcomes = await self.get_collection("welcomes")
+        await welcomes.delete_one({"chat_id": chat_id})
+
+    async def set_goodbye(self, chat_id: int, content: str = None, media_id: str = None, media_type: str = None):
+        goodbyes = await self.get_collection("goodbyes")
+        data = {}
+        if content: data["content"] = content
+        if media_id: data["media_id"] = media_id
+        if media_type: data["media_type"] = media_type
+        
+        await goodbyes.update_one(
+            {"chat_id": chat_id},
+            {"$set": data},
+            upsert=True
+        )
+
+    async def get_goodbye(self, chat_id: int):
+        goodbyes = await self.get_collection("goodbyes")
+        return await goodbyes.find_one({"chat_id": chat_id})
+        
+    async def delete_goodbye(self, chat_id: int):
+        goodbyes = await self.get_collection("goodbyes")
+        await goodbyes.delete_one({"chat_id": chat_id})
+
+    # Captcha
+    async def set_captcha(self, chat_id: int, enabled: bool = None, mode: str = None):
+        settings = await self.get_collection("settings")
+        data = {}
+        if enabled is not None: data["captcha_enabled"] = enabled
+        if mode: data["captcha_mode"] = mode
+        
+        await settings.update_one(
+            {"chat_id": chat_id},
+            {"$set": data},
+            upsert=True
+        )
+
+    async def get_captcha_settings(self, chat_id: int):
+        settings = await self.get_collection("settings")
+        doc = await settings.find_one({"chat_id": chat_id})
+        if not doc:
+            return {"enabled": False, "mode": "button"}
+        return {
+            "enabled": doc.get("captcha_enabled", False),
+            "mode": doc.get("captcha_mode", "button")
+        }
+
+    async def set_rules(self, chat_id: int, rules: str):
+        settings = await self.get_collection("settings")
+        await settings.update_one(
+            {"chat_id": chat_id},
+            {"$set": {"rules": rules}},
+            upsert=True
+        )
+
+    # Blacklist
+    async def add_blacklist(self, chat_id: int, word: str, action: str):
+        blacklist = await self.get_collection("blacklist")
+        await blacklist.update_one(
+            {"chat_id": chat_id},
+            {"$set": {f"words.{word}": action}},
+            upsert=True
+        )
+
+    async def remove_blacklist(self, chat_id: int, word: str):
+        blacklist = await self.get_collection("blacklist")
+        await blacklist.update_one(
+            {"chat_id": chat_id},
+            {"$unset": {f"words.{word}": ""}}
+        )
+
+    async def get_blacklist(self, chat_id: int):
+        blacklist = await self.get_collection("blacklist")
+        doc = await blacklist.find_one({"chat_id": chat_id})
+        return doc.get("words", {}) if doc else {}
+
+    async def get_rules(self, chat_id: int):
+        settings = await self.get_collection("settings")
+        doc = await settings.find_one({"chat_id": chat_id})
+        return doc.get("rules") if doc else None
 
 db = MongoDB()
