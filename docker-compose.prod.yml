@@ -1,4 +1,4 @@
-
+version: '3.8'
 
 services:
   zyrax:
@@ -13,6 +13,13 @@ services:
       - ./zyrax:/app/zyrax
       - ./logs:/app/logs
     restart: always
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     networks:
       - zyrax_net
 
