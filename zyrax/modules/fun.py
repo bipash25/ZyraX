@@ -27,11 +27,24 @@ async def fetch_json(url):
 @Client.on_message(filters.command("quote") & filters.group)
 @error_handler
 async def quote(client: Client, message: Message):
-    data = await fetch_json("https://api.quotable.io/random")
-    if data:
-        await message.reply_text(f"“{data['content']}”\n— __{data['author']}__")
+    # Using zenquotes.io as api.quotable.io is often unreachable
+    data = await fetch_json("https://zenquotes.io/api/random")
+    if data and isinstance(data, list) and len(data) > 0:
+        quote_data = data[0]
+        await message.reply_text(f'"{quote_data["q"]}"\n— __{quote_data["a"]}__')
     else:
-        await message.reply_text("Failed to fetch quote.")
+        # Fallback to local quotes
+        quotes = [
+            ("The only way to do great work is to love what you do.", "Steve Jobs"),
+            ("Innovation distinguishes between a leader and a follower.", "Steve Jobs"),
+            ("Stay hungry, stay foolish.", "Steve Jobs"),
+            ("Life is what happens when you're busy making other plans.", "John Lennon"),
+            ("The future belongs to those who believe in the beauty of their dreams.", "Eleanor Roosevelt"),
+            ("It is during our darkest moments that we must focus to see the light.", "Aristotle"),
+            ("The only impossible journey is the one you never begin.", "Tony Robbins"),
+        ]
+        q, a = random.choice(quotes)
+        await message.reply_text(f'"{q}"\n— __{a}__')
 
 @Client.on_message(filters.command("joke") & filters.group)
 @error_handler

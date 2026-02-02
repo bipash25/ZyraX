@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   zyrax:
     build: .
@@ -12,6 +10,8 @@ services:
     volumes:
       - ./zyrax:/app/zyrax
       - ./logs:/app/logs
+    ports:
+      - "127.0.0.1:8080:8080"
     restart: always
     deploy:
       resources:
@@ -41,30 +41,8 @@ services:
     networks:
       - zyrax_net
 
-  nginx:
-    image: nginx:latest
-    container_name: zyrax_nginx
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./deployment/nginx/conf.d:/etc/nginx/conf.d
-      - ./deployment/certbot/conf:/etc/letsencrypt
-      - ./deployment/certbot/www:/var/www/certbot
-    depends_on:
-      - zyrax
-    restart: always
-    networks:
-      - zyrax_net
-
-  certbot:
-    image: certbot/certbot
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
-    volumes:
-      - ./deployment/certbot/conf:/etc/letsencrypt
-      - ./deployment/certbot/www:/var/www/certbot
-    networks:
-      - zyrax_net
+  # Note: Using host nginx for reverse proxy instead of Docker nginx
+  # SSL certs managed by certbot on host at /etc/letsencrypt/live/zyrax.bipro.tech/
 
 networks:
   zyrax_net:

@@ -66,7 +66,7 @@ async def check_reminders(client: Client):
                 reminder["chat_id"],
                 f"**Reminder for** <a href='tg://user?id={reminder['user_id']}'>User</a>\n\n"
                 f"{reminder['text']}",
-                parse_mode="html"
+                parse_mode="HTML"
             )
         except Exception as e:
             logger.error(f"Failed to send reminder: {e}")

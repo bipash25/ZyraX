@@ -6,6 +6,7 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from zyrax.config import Config
 from zyrax.database.mongo import db
+from zyrax.utils.errors import error_handler
 
 __mod_name__ = "Owner"
 __help__ = """
@@ -75,6 +76,7 @@ def get_pending_action(user_id: int) -> dict:
 
 
 @Client.on_message(filters.command("set2fa") & filters.private)
+@error_handler
 async def set_2fa(client: Client, message: Message):
     if not is_owner(message.from_user.id):
         return
@@ -103,6 +105,7 @@ async def set_2fa(client: Client, message: Message):
 
 
 @Client.on_message(filters.command("confirm") & filters.private)
+@error_handler
 async def confirm_2fa(client: Client, message: Message):
     if not is_owner(message.from_user.id):
         return
@@ -138,6 +141,7 @@ async def confirm_2fa(client: Client, message: Message):
 
 
 @Client.on_message(filters.command("broadcast") & filters.private)
+@error_handler
 async def broadcast_cmd(client: Client, message: Message):
     if not is_owner(message.from_user.id):
         return
@@ -185,6 +189,7 @@ async def execute_broadcast(client: Client, message: Message, text: str):
 
 
 @Client.on_message(filters.command("gban") & filters.private)
+@error_handler
 async def gban_cmd(client: Client, message: Message):
     if not is_owner(message.from_user.id):
         return
@@ -244,6 +249,7 @@ async def execute_gban(client: Client, message: Message, user_id: int):
 
 
 @Client.on_message(filters.command("ungban") & filters.private)
+@error_handler
 async def ungban_cmd(client: Client, message: Message):
     if not is_owner(message.from_user.id):
         return
@@ -270,6 +276,7 @@ async def ungban_cmd(client: Client, message: Message):
 
 
 @Client.on_message(filters.command("stats") & filters.private)
+@error_handler
 async def bot_stats(client: Client, message: Message):
     if not is_owner(message.from_user.id):
         return
@@ -303,6 +310,7 @@ async def bot_stats(client: Client, message: Message):
 
 
 @Client.on_message(filters.command("shell") & filters.private)
+@error_handler
 async def shell_cmd(client: Client, message: Message):
     if not is_owner(message.from_user.id):
         return
@@ -349,6 +357,7 @@ async def execute_shell(client: Client, message: Message, cmd: str):
 
 
 @Client.on_message(filters.command("eval") & filters.private)
+@error_handler
 async def eval_cmd(client: Client, message: Message):
     if not is_owner(message.from_user.id):
         return
@@ -402,6 +411,7 @@ async def execute_eval(client: Client, message: Message, code: str):
 
 
 @Client.on_message(filters.command("leave") & filters.private)
+@error_handler
 async def leave_cmd(client: Client, message: Message):
     if not is_owner(message.from_user.id):
         return
@@ -436,6 +446,7 @@ async def execute_leave(client: Client, message: Message, chat_id: int):
 
 
 @Client.on_message(filters.command("restart") & filters.private)
+@error_handler
 async def restart_cmd(client: Client, message: Message):
     if not is_owner(message.from_user.id):
         return
@@ -461,6 +472,7 @@ async def execute_restart(client: Client, message: Message):
 
 
 @Client.on_message(filters.command("setpanic") & filters.private)
+@error_handler
 async def set_panic(client: Client, message: Message):
     if not is_owner(message.from_user.id):
         return
@@ -479,6 +491,7 @@ async def set_panic(client: Client, message: Message):
 
 
 @Client.on_message(filters.command("panic") & filters.private)
+@error_handler
 async def panic_cmd(client: Client, message: Message):
     if not is_owner(message.from_user.id):
         return

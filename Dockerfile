@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     fonts-dejavu \
     fonts-liberation \
+    libzbar0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install

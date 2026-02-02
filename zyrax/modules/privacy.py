@@ -27,6 +27,8 @@ async def mydata(client: Client, message: Message):
             return obj.isoformat()
         return str(obj)
 
+    # Ensure downloads directory exists
+    os.makedirs("downloads", exist_ok=True)
     file_path = f"downloads/{user_id}_data.json"
     with open(file_path, "w") as f:
         json.dump(data, f, default=json_serial, indent=4)

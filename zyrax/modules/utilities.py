@@ -56,6 +56,7 @@ async def fetch_json(url):
                 return None
 
 @Client.on_message(filters.command("ping"))
+@error_handler
 async def ping(client: Client, message: Message):
     start = time.time()
     msg = await message.reply_text("Pong!")
@@ -133,6 +134,7 @@ async def bin_lookup(client: Client, message: Message):
         await message.reply_text("BIN not found.")
 
 @Client.on_message(filters.command("time") & filters.group)
+@error_handler
 async def world_time(client: Client, message: Message):
     if len(message.command) < 2:
         return await message.reply_text("Usage: /time <timezone/city> (e.g. UTC, Asia/Kolkata)")
@@ -298,6 +300,48 @@ async def generate_qr(client: Client, message: Message):
     buf.name = "qrcode.png"
     
     await message.reply_photo(buf, caption=f"QR Code for: `{text[:100]}`")
+
+
+@Client.on_message(filters.command(["qrread", "qrscan"]))
+@error_handler
+async def read_qr(client: Client, message: Message):
+    """Read QR code from replied image"""
+    if not message.reply_to_message:
+        return await message.reply_text("Reply to an image containing a QR code.")
+    
+    reply = message.reply_to_message
+    if not reply.photo and not reply.document:
+        return await message.reply_text("Reply to an image containing a QR code.")
+    
+    msg = await message.reply_text("Scanning QR code...")
+    
+    try:
+        # Download the image
+        file_path = await reply.download()
+        
+        # Try to decode using PIL and pyzbar (if available) or use API
+        from PIL import Image
+        
+        try:
+            from pyzbar.pyzbar import decode
+            img = Image.open(file_path)
+            decoded = decode(img)
+            
+            if decoded:
+                data = decoded[0].data.decode('utf-8')
+                await msg.edit_text(f"**QR Code Content:**\n`{data}`")
+            else:
+                await msg.edit_text("Could not read QR code from image.")
+        except ImportError:
+            # pyzbar not installed, use an API fallback
+            await msg.edit_text("QR reading requires pyzbar library. Please install it.")
+        
+        # Cleanup
+        import os
+        os.remove(file_path)
+        
+    except Exception as e:
+        await msg.edit_text(f"Error reading QR: {e}")
 
 
 # ===== REMINDERS =====

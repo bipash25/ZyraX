@@ -1,6 +1,7 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from zyrax.config import Config
+from zyrax.utils.errors import error_handler
 import google.generativeai as genai
 import random
 import aiohttp
@@ -30,6 +31,7 @@ def get_gemini_response(question: str):
     return response.text
 
 @Client.on_message(filters.command(["ask", "gemini", "chatgpt"]) & filters.group)
+@error_handler
 async def ask_ai(client: Client, message: Message):
     if len(message.command) < 2:
         return await message.reply_text("Usage: /ask <question>")
@@ -59,6 +61,7 @@ async def ask_ai(client: Client, message: Message):
         await msg.edit_text(f"AI Error: {e}")
 
 @Client.on_message(filters.command("imagine") & filters.group)
+@error_handler
 async def imagine(client: Client, message: Message):
     if len(message.command) < 2:
         return await message.reply_text("Usage: /imagine <prompt>")
@@ -95,6 +98,7 @@ async def imagine(client: Client, message: Message):
 
 # ===== DOCUMENT SUMMARIZATION =====
 @Client.on_message(filters.command(["summarize", "tldr"]))
+@error_handler
 async def summarize_content(client: Client, message: Message):
     if not Config.GEMINI_API_KEYS:
         return await message.reply_text("AI is currently disabled (No Gemini API Keys).")
@@ -171,6 +175,7 @@ async def summarize_content(client: Client, message: Message):
 
 # ===== EXPLAIN TOPIC =====
 @Client.on_message(filters.command("explain"))
+@error_handler
 async def explain_topic(client: Client, message: Message):
     if len(message.command) < 2:
         return await message.reply_text("Usage: /explain <topic>")
@@ -201,6 +206,7 @@ async def explain_topic(client: Client, message: Message):
 
 # ===== TRANSLATE =====
 @Client.on_message(filters.command("translate"))
+@error_handler
 async def translate_text(client: Client, message: Message):
     if len(message.command) < 3 and not message.reply_to_message:
         return await message.reply_text(

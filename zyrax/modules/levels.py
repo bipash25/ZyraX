@@ -1,6 +1,7 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from zyrax.database.mongo import db
+from zyrax.utils.errors import error_handler
 import time
 import asyncio
 
@@ -76,6 +77,7 @@ async def xp_handler(client: Client, message: Message):
         )
 
 @Client.on_message(filters.command("rank"))
+@error_handler
 async def rank_command(client: Client, message: Message):
     # Allow PM usage
     user = message.from_user
@@ -100,6 +102,7 @@ async def rank_command(client: Client, message: Message):
     )
 
 @Client.on_message(filters.command("top"))
+@error_handler
 async def leaderboard(client: Client, message: Message):
     # Allow PM usage
     top_users = await db.get_top_users(limit=10, sort_by="xp")

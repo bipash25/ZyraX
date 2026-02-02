@@ -3,6 +3,7 @@ from pyrogram.types import Message
 from zyrax.database.mongo import db
 from zyrax.utils.ratelimit import rate_limit
 from zyrax.utils.users import extract_user
+from zyrax.utils.errors import error_handler
 import random
 import time
 
@@ -18,6 +19,7 @@ __help__ = """
 CURRENCY = "ZyraCoins"
 
 @Client.on_message(filters.command(["balance", "bal", "bf"]))
+@error_handler
 async def balance_command(client: Client, message: Message):
     user = await extract_user(client, message)
     target_id = user.id if user else message.from_user.id
@@ -29,6 +31,7 @@ async def balance_command(client: Client, message: Message):
     await message.reply_text(f"💰 **{name}'s Balance:** `{bal}` {CURRENCY}")
 
 @Client.on_message(filters.command("daily"))
+@error_handler
 async def daily_reward(client: Client, message: Message):
     user_id = message.from_user.id
     today = time.strftime("%Y-%m-%d")
@@ -48,6 +51,7 @@ async def daily_reward(client: Client, message: Message):
 
 @Client.on_message(filters.command("work"))
 @rate_limit(max_attempts=1, window=300) # 5 min cooldown
+@error_handler
 async def work_command(client: Client, message: Message):
     earnings = random.randint(10, 100)
     await db.add_balance(message.from_user.id, earnings)
@@ -58,6 +62,7 @@ async def work_command(client: Client, message: Message):
     await message.reply_text(f"🔨 You worked as a **{job}** and earned **{earnings} {CURRENCY}**!")
 
 @Client.on_message(filters.command("pay"))
+@error_handler
 async def pay_command(client: Client, message: Message):
     # Args: /pay amount reply OR /pay user amount
     if len(message.command) < 2:
@@ -111,6 +116,7 @@ async def pay_command(client: Client, message: Message):
     )
 
 @Client.on_message(filters.command("rich"))
+@error_handler
 async def rich_list(client: Client, message: Message):
     users = await db.get_top_users(limit=10, sort_by="balance")
     text = f"💎 **Richest Users ({CURRENCY})**\n\n"
