@@ -25,6 +25,13 @@ __help__ = """
 
 **Two-Player Games:**
 /ttt @user - Tic-Tac-Toe challenge
+/c4 @user - Connect Four challenge
+
+**Multiplayer Games:**
+/rr [bet] - Start Russian Roulette
+/rrjoin - Join Russian Roulette
+/rrstart - Start the game
+/rrcancel - Cancel game
 
 **Gambling (requires coins):**
 /gamble <amount> - 50/50 double or nothing
@@ -717,3 +724,396 @@ async def blackjack_action(client: Client, callback: CallbackQuery):
         )
     
     await callback.answer()
+
+
+# ===== CONNECT FOUR =====
+C4_GAMES = {}
+
+def render_c4_board(board):
+    """Render Connect Four board with colored circles"""
+    symbols = {0: "", 1: "", 2: ""}
+    rows = []
+    for row in board:
+        rows.append("".join(symbols[cell] for cell in row))
+    # Add column numbers at bottom
+    numbers = ""
+    return "\n".join(rows) + "\n" + numbers
+
+def check_c4_winner(board):
+    """Check for Connect Four winner (4 in a row)"""
+    rows = len(board)
+    cols = len(board[0])
+    
+    # Check horizontal
+    for r in range(rows):
+        for c in range(cols - 3):
+            if board[r][c] != 0 and board[r][c] == board[r][c+1] == board[r][c+2] == board[r][c+3]:
+                return board[r][c]
+    
+    # Check vertical
+    for r in range(rows - 3):
+        for c in range(cols):
+            if board[r][c] != 0 and board[r][c] == board[r+1][c] == board[r+2][c] == board[r+3][c]:
+                return board[r][c]
+    
+    # Check diagonal (down-right)
+    for r in range(rows - 3):
+        for c in range(cols - 3):
+            if board[r][c] != 0 and board[r][c] == board[r+1][c+1] == board[r+2][c+2] == board[r+3][c+3]:
+                return board[r][c]
+    
+    # Check diagonal (down-left)
+    for r in range(rows - 3):
+        for c in range(3, cols):
+            if board[r][c] != 0 and board[r][c] == board[r+1][c-1] == board[r+2][c-2] == board[r+3][c-3]:
+                return board[r][c]
+    
+    # Check for draw (board full)
+    if all(board[0][c] != 0 for c in range(cols)):
+        return -1
+    
+    return 0  # Game continues
+
+def drop_piece(board, col, player):
+    """Drop a piece in the column, return row or -1 if column full"""
+    for row in range(5, -1, -1):  # Start from bottom
+        if board[row][col] == 0:
+            board[row][col] = player
+            return row
+    return -1
+
+
+@Client.on_message(filters.command("c4") & filters.group)
+async def connect_four_start(client: Client, message: Message):
+    chat_id = message.chat.id
+    
+    if chat_id in C4_GAMES:
+        return await message.reply_text("A Connect Four game is already in progress!")
+    
+    if not message.reply_to_message:
+        return await message.reply_text("Reply to someone to challenge them to Connect Four!")
+    
+    player1 = message.from_user.id
+    player2 = message.reply_to_message.from_user.id
+    
+    if player1 == player2:
+        return await message.reply_text("You can't play against yourself!")
+    
+    # 6 rows x 7 columns board
+    board = [[0 for _ in range(7)] for _ in range(6)]
+    
+    C4_GAMES[chat_id] = {
+        "board": board,
+        "player1": player1,
+        "player2": player2,
+        "turn": player1,
+        "p1_name": message.from_user.first_name,
+        "p2_name": message.reply_to_message.from_user.first_name
+    }
+    
+    # Create column buttons
+    buttons = [[
+        InlineKeyboardButton(str(i+1), callback_data=f"c4_{i}") for i in range(7)
+    ]]
+    
+    game = C4_GAMES[chat_id]
+    await message.reply_text(
+        f"**Connect Four**\n\n"
+        f"{game['p1_name']} () vs {game['p2_name']} ()\n\n"
+        f"{render_c4_board(board)}\n\n"
+        f"{game['p1_name']}'s turn!",
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
+
+
+@Client.on_callback_query(filters.regex(r"^c4_\d$"))
+async def connect_four_move(client: Client, callback: CallbackQuery):
+    chat_id = callback.message.chat.id
+    
+    if chat_id not in C4_GAMES:
+        return await callback.answer("Game ended.", show_alert=True)
+    
+    game = C4_GAMES[chat_id]
+    user_id = callback.from_user.id
+    
+    if user_id not in [game["player1"], game["player2"]]:
+        return await callback.answer("You're not in this game!", show_alert=True)
+    
+    if user_id != game["turn"]:
+        return await callback.answer("Not your turn!", show_alert=True)
+    
+    col = int(callback.data.split("_")[1])
+    player = 1 if user_id == game["player1"] else 2
+    
+    row = drop_piece(game["board"], col, player)
+    if row == -1:
+        return await callback.answer("Column is full!", show_alert=True)
+    
+    winner = check_c4_winner(game["board"])
+    
+    if winner > 0:
+        winner_name = game["p1_name"] if winner == 1 else game["p2_name"]
+        winner_id = game["player1"] if winner == 1 else game["player2"]
+        del C4_GAMES[chat_id]
+        await db.add_balance(winner_id, 75)
+        await db.update_game_stats(winner_id, "connect4", True)
+        await callback.message.edit_text(
+            f"**{winner_name} wins Connect Four!**\n\n"
+            f"{render_c4_board(game['board'])}\n\n"
+            f"Reward: 75 coins"
+        )
+    elif winner == -1:
+        del C4_GAMES[chat_id]
+        await callback.message.edit_text(
+            f"**It's a draw!**\n\n"
+            f"{render_c4_board(game['board'])}"
+        )
+    else:
+        # Switch turns
+        game["turn"] = game["player2"] if game["turn"] == game["player1"] else game["player1"]
+        turn_name = game["p1_name"] if game["turn"] == game["player1"] else game["p2_name"]
+        
+        buttons = [[
+            InlineKeyboardButton(str(i+1), callback_data=f"c4_{i}") for i in range(7)
+        ]]
+        
+        await callback.message.edit_text(
+            f"**Connect Four**\n\n"
+            f"{game['p1_name']} () vs {game['p2_name']} ()\n\n"
+            f"{render_c4_board(game['board'])}\n\n"
+            f"{turn_name}'s turn!",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+    
+    await callback.answer()
+
+
+# ===== RUSSIAN ROULETTE =====
+RR_GAMES = {}
+
+@Client.on_message(filters.command("rr") & filters.group)
+async def russian_roulette_start(client: Client, message: Message):
+    chat_id = message.chat.id
+    
+    if chat_id in RR_GAMES:
+        game = RR_GAMES[chat_id]
+        return await message.reply_text(
+            f"A Russian Roulette game is in progress!\n"
+            f"Players: {len(game['players'])}/6\n"
+            f"Use /rrjoin to join or /rrstart to begin!"
+        )
+    
+    # Get bet amount
+    bet = 50
+    if len(message.command) > 1:
+        try:
+            bet = int(message.command[1])
+        except:
+            pass
+    bet = min(max(bet, 10), 500)
+    
+    RR_GAMES[chat_id] = {
+        "players": [{
+            "id": message.from_user.id,
+            "name": message.from_user.first_name
+        }],
+        "bet": bet,
+        "started": False,
+        "current_player": 0,
+        "bullet_chamber": random.randint(0, 5),
+        "current_chamber": 0
+    }
+    
+    await message.reply_text(
+        f"**Russian Roulette**\n\n"
+        f"Buy-in: {bet} coins\n"
+        f"Players: 1/6\n\n"
+        f"{message.from_user.first_name} created a game!\n\n"
+        f"Use /rrjoin to join\n"
+        f"Use /rrstart when ready (min 2 players)"
+    )
+
+
+@Client.on_message(filters.command("rrjoin") & filters.group)
+async def russian_roulette_join(client: Client, message: Message):
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+    
+    if chat_id not in RR_GAMES:
+        return await message.reply_text("No game in progress. Use /rr to start one!")
+    
+    game = RR_GAMES[chat_id]
+    
+    if game["started"]:
+        return await message.reply_text("Game already started!")
+    
+    if len(game["players"]) >= 6:
+        return await message.reply_text("Game is full! (6 players max)")
+    
+    if any(p["id"] == user_id for p in game["players"]):
+        return await message.reply_text("You're already in the game!")
+    
+    # Check balance
+    user_data = await db.get_user_data(user_id)
+    balance = user_data.get("balance", 0) if user_data else 0
+    
+    if balance < game["bet"]:
+        return await message.reply_text(f"Not enough coins! You need {game['bet']} coins to join.")
+    
+    # Deduct bet
+    await db.add_balance(user_id, -game["bet"])
+    
+    game["players"].append({
+        "id": user_id,
+        "name": message.from_user.first_name
+    })
+    
+    player_list = "\n".join(f"- {p['name']}" for p in game["players"])
+    await message.reply_text(
+        f"**{message.from_user.first_name} joined!**\n\n"
+        f"Players ({len(game['players'])}/6):\n{player_list}\n\n"
+        f"Use /rrstart when ready!"
+    )
+
+
+@Client.on_message(filters.command("rrstart") & filters.group)
+async def russian_roulette_begin(client: Client, message: Message):
+    chat_id = message.chat.id
+    
+    if chat_id not in RR_GAMES:
+        return await message.reply_text("No game in progress!")
+    
+    game = RR_GAMES[chat_id]
+    
+    if game["started"]:
+        return await message.reply_text("Game already started!")
+    
+    if len(game["players"]) < 2:
+        return await message.reply_text("Need at least 2 players to start!")
+    
+    # Deduct bet from first player
+    user_data = await db.get_user_data(game["players"][0]["id"])
+    balance = user_data.get("balance", 0) if user_data else 0
+    if balance >= game["bet"]:
+        await db.add_balance(game["players"][0]["id"], -game["bet"])
+    
+    game["started"] = True
+    random.shuffle(game["players"])
+    
+    current = game["players"][0]
+    
+    buttons = InlineKeyboardMarkup([[
+        InlineKeyboardButton("Pull Trigger", callback_data="rr_pull")
+    ]])
+    
+    pot = game["bet"] * len(game["players"])
+    await message.reply_text(
+        f"**Russian Roulette Started!**\n\n"
+        f"Pot: {pot} coins\n"
+        f"Chamber: ?/6\n\n"
+        f"**{current['name']}**, it's your turn!\n"
+        f"Pull the trigger...",
+        reply_markup=buttons
+    )
+
+
+@Client.on_callback_query(filters.regex(r"^rr_pull$"))
+async def russian_roulette_pull(client: Client, callback: CallbackQuery):
+    chat_id = callback.message.chat.id
+    user_id = callback.from_user.id
+    
+    if chat_id not in RR_GAMES:
+        return await callback.answer("Game ended.", show_alert=True)
+    
+    game = RR_GAMES[chat_id]
+    
+    if not game["started"]:
+        return await callback.answer("Game hasn't started!", show_alert=True)
+    
+    current_player = game["players"][game["current_player"]]
+    
+    if user_id != current_player["id"]:
+        return await callback.answer("Not your turn!", show_alert=True)
+    
+    # Check if bullet fires
+    if game["current_chamber"] == game["bullet_chamber"]:
+        # BANG! Player is out
+        eliminated = game["players"].pop(game["current_player"])
+        
+        if len(game["players"]) == 1:
+            # Winner!
+            winner = game["players"][0]
+            pot = game["bet"] * (len(game["players"]) + 1 + game["current_chamber"])
+            await db.add_balance(winner["id"], pot)
+            await db.update_game_stats(winner["id"], "roulette", True)
+            
+            del RR_GAMES[chat_id]
+            
+            await callback.message.edit_text(
+                f"**BANG!**\n\n"
+                f"{eliminated['name']} is eliminated!\n\n"
+                f"**{winner['name']} WINS {pot} coins!**"
+            )
+        else:
+            # Game continues, reset chamber
+            game["bullet_chamber"] = random.randint(0, 5)
+            game["current_chamber"] = 0
+            if game["current_player"] >= len(game["players"]):
+                game["current_player"] = 0
+            
+            next_player = game["players"][game["current_player"]]
+            remaining = ", ".join(p["name"] for p in game["players"])
+            
+            buttons = InlineKeyboardMarkup([[
+                InlineKeyboardButton("Pull Trigger", callback_data="rr_pull")
+            ]])
+            
+            await callback.message.edit_text(
+                f"**BANG!**\n\n"
+                f"{eliminated['name']} is eliminated!\n\n"
+                f"Remaining: {remaining}\n"
+                f"New round! Chamber reloaded.\n\n"
+                f"**{next_player['name']}**, your turn!",
+                reply_markup=buttons
+            )
+    else:
+        # Click! Safe
+        game["current_chamber"] += 1
+        game["current_player"] = (game["current_player"] + 1) % len(game["players"])
+        next_player = game["players"][game["current_player"]]
+        
+        buttons = InlineKeyboardMarkup([[
+            InlineKeyboardButton("Pull Trigger", callback_data="rr_pull")
+        ]])
+        
+        await callback.message.edit_text(
+            f"*Click!*\n\n"
+            f"{current_player['name']} survives!\n"
+            f"Chamber: {game['current_chamber']}/6\n\n"
+            f"**{next_player['name']}**, your turn!",
+            reply_markup=buttons
+        )
+    
+    await callback.answer()
+
+
+@Client.on_message(filters.command("rrcancel") & filters.group)
+async def russian_roulette_cancel(client: Client, message: Message):
+    chat_id = message.chat.id
+    
+    if chat_id not in RR_GAMES:
+        return await message.reply_text("No game in progress!")
+    
+    game = RR_GAMES[chat_id]
+    
+    # Only creator can cancel
+    if message.from_user.id != game["players"][0]["id"]:
+        return await message.reply_text("Only the game creator can cancel!")
+    
+    # Refund bets if not started
+    if not game["started"]:
+        for player in game["players"]:
+            await db.add_balance(player["id"], game["bet"])
+    
+    del RR_GAMES[chat_id]
+    await message.reply_text("Game cancelled.")

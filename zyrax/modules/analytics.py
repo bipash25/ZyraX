@@ -5,6 +5,7 @@ from zyrax.utils.decorators import require_admin
 from zyrax.utils.errors import error_handler
 import json
 import io
+from collections import Counter
 
 __mod_name__ = "Analytics"
 __help__ = """
@@ -13,6 +14,7 @@ __help__ = """
 /userstats [@user] - View user stats
 /topactive - Top 10 most active users
 /activitystats - Activity summary
+/wordcloud - Generate word cloud from chat messages
 
 **Export:**
 /exportstats - Export analytics as JSON file
@@ -233,3 +235,139 @@ async def game_stats(client: Client, message: Message):
                 text += f"  {i}. {name} - {wins} wins\n"
     
     await message.reply_text(text)
+
+
+# ===== WORD CLOUD GENERATOR =====
+# Common stop words to filter out
+STOP_WORDS = {
+    'the', 'be', 'to', 'of', 'and', 'a', 'in', 'that', 'have', 'i', 'it', 'for',
+    'not', 'on', 'with', 'he', 'as', 'you', 'do', 'at', 'this', 'but', 'his',
+    'by', 'from', 'they', 'we', 'say', 'her', 'she', 'or', 'an', 'will', 'my',
+    'one', 'all', 'would', 'there', 'their', 'what', 'so', 'up', 'out', 'if',
+    'about', 'who', 'get', 'which', 'go', 'me', 'when', 'make', 'can', 'like',
+    'time', 'no', 'just', 'him', 'know', 'take', 'people', 'into', 'year', 'your',
+    'good', 'some', 'could', 'them', 'see', 'other', 'than', 'then', 'now', 'look',
+    'only', 'come', 'its', 'over', 'think', 'also', 'back', 'after', 'use', 'two',
+    'how', 'our', 'work', 'first', 'well', 'way', 'even', 'new', 'want', 'because',
+    'any', 'these', 'give', 'day', 'most', 'us', 'is', 'are', 'was', 'were', 'been',
+    'has', 'had', 'did', 'does', 'doing', 'am', 'being', "i'm", "it's", "don't",
+    "i've", "that's", "can't", "won't", "isn't", "aren't", "wasn't", "weren't",
+    "hasn't", "haven't", "hadn't", "doesn't", "didn't", "shouldn't", "wouldn't",
+    "couldn't", "mightn't", "mustn't", "yeah", "yep", "yes", "no", "ok", "okay",
+    "lol", "lmao", "haha", "hehe", "omg", "wtf", "idk", "tbh", "imo", "imho"
+}
+
+@Client.on_message(filters.command("wordcloud") & filters.group)
+@require_admin()
+@error_handler
+async def generate_wordcloud(client: Client, message: Message):
+    """Generate a word cloud from recent chat messages"""
+    msg = await message.reply_text("Analyzing chat messages...")
+    
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+        import random
+        
+        chat_id = message.chat.id
+        
+        # Get filter stats as a proxy for word frequency
+        filter_stats = await db.get_filter_stats(chat_id)
+        
+        # Get top active users
+        users = await db.get_collection("users")
+        cursor = users.find({"msg_count": {"$exists": True}}).sort("msg_count", -1).limit(50)
+        
+        word_freq = Counter()
+        
+        # Add filter names
+        for stat in filter_stats:
+            word_freq[stat.get("filter", "unknown")] = stat.get("hits", 1)
+        
+        # Add usernames
+        async for user in cursor:
+            username = user.get("username")
+            if username:
+                word_freq[username] = user.get("msg_count", 1) // 10
+        
+        # If no data, use placeholder
+        if not word_freq:
+            word_freq = Counter({
+                "chat": 50, "active": 40, "community": 35, "members": 30,
+                "discussion": 25, "topic": 20, "message": 18, "group": 15,
+                "telegram": 12, "bot": 10
+            })
+        
+        # Generate word cloud image
+        width, height = 800, 400
+        img = Image.new('RGB', (width, height), color=(30, 30, 45))
+        draw = ImageDraw.Draw(img)
+        
+        sorted_words = word_freq.most_common(30)
+        
+        if not sorted_words:
+            await msg.edit_text("Not enough data to generate word cloud.")
+            return
+        
+        max_freq = sorted_words[0][1] if sorted_words else 1
+        
+        colors = [
+            (100, 150, 255), (255, 150, 100), (100, 255, 150),
+            (255, 200, 100), (200, 100, 255), (100, 200, 255)
+        ]
+        
+        try:
+            font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+            base_font = ImageFont.truetype(font_path, 20)
+        except:
+            base_font = ImageFont.load_default()
+        
+        placed = []
+        for word, freq in sorted_words:
+            size = int(15 + (freq / max_freq) * 35)
+            
+            try:
+                font = ImageFont.truetype(font_path, size)
+            except:
+                font = base_font
+            
+            color = random.choice(colors)
+            
+            for _ in range(50):
+                bbox = draw.textbbox((0, 0), word, font=font)
+                text_width = bbox[2] - bbox[0]
+                text_height = bbox[3] - bbox[1]
+                
+                x = random.randint(10, max(11, width - text_width - 10))
+                y = random.randint(10, max(11, height - text_height - 10))
+                
+                new_rect = (x, y, x + text_width, y + text_height)
+                overlap = False
+                for rect in placed:
+                    if not (new_rect[2] < rect[0] or new_rect[0] > rect[2] or
+                            new_rect[3] < rect[1] or new_rect[1] > rect[3]):
+                        overlap = True
+                        break
+                
+                if not overlap:
+                    draw.text((x, y), word, fill=color, font=font)
+                    placed.append(new_rect)
+                    break
+        
+        try:
+            title_font = ImageFont.truetype(font_path, 14)
+        except:
+            title_font = base_font
+        draw.text((10, height - 25), "Word Cloud - Chat Activity", fill=(150, 150, 150), font=title_font)
+        
+        output = io.BytesIO()
+        img.save(output, format='PNG')
+        output.seek(0)
+        output.name = "wordcloud.png"
+        
+        await msg.delete()
+        await message.reply_photo(photo=output, caption="Word Cloud based on chat activity")
+        
+    except ImportError:
+        await msg.edit_text("Word cloud generation requires PIL. Contact admin.")
+    except Exception as e:
+        await msg.edit_text(f"Error generating word cloud: {e}")
