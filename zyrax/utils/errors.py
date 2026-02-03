@@ -342,22 +342,20 @@ async def retry_on_flood(
 
 
 def error_handler(
+    func: Optional[Callable[P, T]] = None,
+    *,
     notify_user: bool = True,
     notify_owner: bool = True,
     reraise: bool = False
-) -> Callable[[Callable[P, T]], Callable[P, T]]:
+) -> Callable:
     """
     Decorator to handle errors in command handlers.
     
-    Args:
-        notify_user: Send error message to user
-        notify_owner: Notify bot owner of unexpected errors
-        reraise: Re-raise the exception after handling
-        
-    Returns:
-        Decorated function
-        
-    Example:
+    Can be used with or without parentheses:
+        @error_handler
+        async def my_command(client, message):
+            ...
+            
         @error_handler()
         async def my_command(client, message):
             ...
@@ -365,9 +363,18 @@ def error_handler(
         @error_handler(notify_owner=False)
         async def less_important_command(client, message):
             ...
+    
+    Args:
+        func: The function being decorated (when used without parentheses)
+        notify_user: Send error message to user
+        notify_owner: Notify bot owner of unexpected errors
+        reraise: Re-raise the exception after handling
+        
+    Returns:
+        Decorated function
     """
-    def decorator(func: Callable[P, T]) -> Callable[P, T]:
-        @wraps(func)
+    def decorator(f: Callable[P, T]) -> Callable[P, T]:
+        @wraps(f)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
             # Find client and message in args
             client = None
@@ -383,7 +390,7 @@ def error_handler(
                     callback_query = arg
             
             try:
-                return await func(*args, **kwargs)
+                return await f(*args, **kwargs)
             except Exception as e:
                 if client and message:
                     await ErrorHandler.handle(
@@ -397,12 +404,17 @@ def error_handler(
                         notify_user=notify_user
                     )
                 else:
-                    logger.error(f"Error in {func.__name__}: {e}", exc_info=True)
+                    logger.error(f"Error in {f.__name__}: {e}", exc_info=True)
                 
                 if reraise:
                     raise
         
         return wrapper  # type: ignore
+    
+    # If called without parentheses, func is the decorated function
+    if func is not None:
+        return decorator(func)
+    # If called with parentheses, return the decorator
     return decorator
 
 
