@@ -7,7 +7,7 @@ from zyrax.utils.time_parser import parse_duration
 from zyrax.utils.users import extract_user
 from zyrax.utils.i18n import get_text
 from zyrax.database.mongo import db
-import time
+from zyrax.constants import Limits
 from datetime import datetime, timedelta
 
 __mod_name__ = "Bans"
@@ -43,6 +43,7 @@ async def ban_user(client: Client, message: Message):
         await message.reply_text(get_text("error", lang, error=str(e)))
 
 @Client.on_message(filters.command("unban") & filters.group)
+@rate_limit(max_attempts=5, window=60)
 @error_handler
 @require_admin()
 async def unban_user(client: Client, message: Message):
@@ -83,6 +84,7 @@ async def kick_user(client: Client, message: Message):
         await message.reply_text(get_text("error", lang, error=str(e)))
 
 @Client.on_message(filters.command("mute") & filters.group)
+@rate_limit(max_attempts=5, window=60)
 @error_handler
 @require_admin()
 async def mute_user(client: Client, message: Message):
@@ -103,6 +105,7 @@ async def mute_user(client: Client, message: Message):
         await message.reply_text(get_text("error", lang, error=str(e)))
 
 @Client.on_message(filters.command("unmute") & filters.group)
+@rate_limit(max_attempts=5, window=60)
 @error_handler
 @require_admin()
 async def unmute_user(client: Client, message: Message):
@@ -136,6 +139,7 @@ async def unmute_user(client: Client, message: Message):
         await message.reply_text(get_text("error", lang, error=str(e)))
 
 @Client.on_message(filters.command("tban") & filters.group)
+@rate_limit(max_attempts=5, window=60)
 @error_handler
 @require_admin()
 async def tban_user(client: Client, message: Message):
@@ -179,6 +183,7 @@ async def tban_user(client: Client, message: Message):
         await message.reply_text(f"Failed to ban: {str(e)}")
 
 @Client.on_message(filters.command("tmute") & filters.group)
+@rate_limit(max_attempts=5, window=60)
 @error_handler
 @require_admin()
 async def tmute_user(client: Client, message: Message):
@@ -217,6 +222,7 @@ async def tmute_user(client: Client, message: Message):
         await message.reply_text(f"Failed to mute: {str(e)}")
 
 @Client.on_message(filters.command("sban") & filters.group)
+@rate_limit(max_attempts=5, window=60)
 @error_handler
 @require_admin()
 async def sban_user(client: Client, message: Message):

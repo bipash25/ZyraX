@@ -1,10 +1,11 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message, ChatPrivileges
-from pyrogram.enums import ChatMemberStatus
+from pyrogram.enums import ChatMembersFilter
 from zyrax.utils.decorators import require_admin
 from zyrax.utils.errors import error_handler
 from zyrax.utils.users import extract_user
 from zyrax.database.mongo import db
+from zyrax.constants import Limits
 
 __mod_name__ = "Admin"
 __help__ = """
@@ -31,9 +32,9 @@ async def promote(client: Client, message: Message):
     elif len(message.command) > 2:
         title = " ".join(message.command[2:])
         
-    # Trim title to 16 chars (Telegram limit)
-    if len(title) > 16:
-        title = title[:16]
+    # Trim title to Telegram's limit
+    if len(title) > Limits.MAX_ADMIN_TITLE_LENGTH:
+        title = title[:Limits.MAX_ADMIN_TITLE_LENGTH]
 
     user_id = user.id if hasattr(user, "id") else user
     user_mention = user.mention if hasattr(user, "mention") else str(user_id)
@@ -104,29 +105,11 @@ async def demote(client: Client, message: Message):
         await message.reply_text(f"Failed to demote: {str(e)}")
 
 @Client.on_message(filters.command("adminlist") & filters.group)
+@error_handler
 async def adminlist(client: Client, message: Message):
     chat_id = message.chat.id
     admins = []
-    # Using async iterator
     try:
-        # Pass enum value properly. If ChatMemberStatus.ADMINISTRATOR is just "administrator" string, it works.
-        # But if it's an enum object, Pyrogram might expect string.
-        # Let's use the string literals to be safe as per Pyrogram docs often recommending enums but strings work too.
-        # Or checking if ChatMemberStatus needs to be imported from a specific place.
-        # We imported `from pyrogram.enums import ChatMemberStatus`.
-        # The error "'str' object is not callable" is weird.
-        # It happens if `client.get_chat_members` was shadowed or something? No.
-        # Ah, `filter` argument name collision? No.
-        # Wait, in the previous code I saw: `async for member in client.get_chat_members(chat_id, filter=ChatMemberStatus.ADMINISTRATOR):`
-        # Pyrogram `get_chat_members` signature is `get_chat_members(chat_id, query="", limit=200, filter=enums.ChatMembersFilter.SEARCH)`.
-        # `ChatMemberStatus` is for `member.status`.
-        # `ChatMembersFilter` is for `filter`.
-        # I am passing `ChatMemberStatus.ADMINISTRATOR` to `filter`.
-        # `ChatMembersFilter` has ADMINISTRATORS (plural). `ChatMemberStatus` has ADMINISTRATOR (singular).
-        # THIS IS THE BUG. I am using the wrong enum.
-        
-        from pyrogram.enums import ChatMembersFilter
-        
         async for member in client.get_chat_members(chat_id, filter=ChatMembersFilter.ADMINISTRATORS):
             user = member.user
             name = user.first_name if user else "Unknown"
