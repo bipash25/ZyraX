@@ -39,9 +39,24 @@ def get_module_paths() -> List[str]:
     ]
 
 
+def get_package_names() -> List[str]:
+    """Get all package directory names (directories with __init__.py)."""
+    mod_dir = os.path.dirname(__file__)
+    packages = []
+    for item in os.listdir(mod_dir):
+        item_path = join(mod_dir, item)
+        if os.path.isdir(item_path) and not item.startswith('_'):
+            init_file = join(item_path, "__init__.py")
+            if os.path.isfile(init_file):
+                packages.append(item)
+    return packages
+
+
 def get_module_names() -> List[str]:
-    """Get all module names (without .py extension)."""
-    return [basename(f)[:-3] for f in get_module_paths()]
+    """Get all module names (files without .py extension + packages)."""
+    file_modules = [basename(f)[:-3] for f in get_module_paths()]
+    package_modules = get_package_names()
+    return file_modules + package_modules
 
 
 def load_module(module_name: str) -> bool:
