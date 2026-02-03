@@ -1,13 +1,24 @@
+"""
+ZyraX Anti-Spam Module
+
+Spam detection and prevention with configurable settings.
+"""
+
+import re
+import time
+from typing import Dict, Any, List, Optional
+
 from pyrogram import Client, filters
 from pyrogram.types import Message, ChatPermissions
 from pyrogram.enums import ChatMemberStatus
-from zyrax.utils.decorators import require_admin
+
+from zyrax.utils.decorators import require_admin, is_user_admin
 from zyrax.utils.errors import error_handler
 from zyrax.utils.users import extract_user
+from zyrax.utils.time_parser import parse_duration
 from zyrax.database.mongo import db
-import re
-import time
-import asyncio
+from zyrax.constants import Limits, AntiSpam, Timeouts
+
 
 __mod_name__ = "AntiSpam"
 __help__ = """
@@ -34,24 +45,60 @@ __help__ = """
 /whitelist list - Show whitelisted domains
 """
 
-# Suspicious link patterns (phishing, scams)
-SUSPICIOUS_PATTERNS = [
-    r't\.me/\+[a-zA-Z0-9_-]+',  # Private group invites
-    r'bit\.ly', r'tinyurl', r'goo\.gl', r'is\.gd',  # URL shorteners
-    r'discord\.gg', r'discord\.com/invite',  # Discord invites
-]
 
-# Known phishing domains (extend this list)
-PHISHING_DOMAINS = [
-    'telegramverify', 'telegram-verify', 'tg-verify', 
-    'cryptoairdrop', 'free-nft', 'usdt-giveaway',
-    'wallet-connect', 'metamask-sync'
-]
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
+
+async def check_admin_status(message: Message) -> bool:
+    """Check if message sender is an admin (cached)."""
+    try:
+        return await is_user_admin(
+            message._client,
+            message.chat.id,
+            message.from_user.id
+        )
+    except Exception:
+        return False
+
+
+def extract_domain(url: str) -> str:
+    """Extract domain from URL."""
+    return url.replace("https://", "").replace("http://", "").split("/")[0]
+
+
+def is_suspicious_url(url: str) -> bool:
+    """Check if URL matches suspicious patterns."""
+    for pattern in AntiSpam.SUSPICIOUS_PATTERNS:
+        if re.search(pattern, url):
+            return True
+    
+    domain = extract_domain(url).lower()
+    for keyword in AntiSpam.PHISHING_KEYWORDS:
+        if keyword in domain:
+            return True
+    
+    return False
+
+
+def format_raid_duration(seconds: int) -> str:
+    """Format duration for display."""
+    hours = seconds // 3600
+    mins = (seconds % 3600) // 60
+    if hours:
+        return f"{hours}h {mins}m"
+    return f"{mins}m"
+
+
+# =============================================================================
+# SETTINGS COMMANDS
+# =============================================================================
 
 @Client.on_message(filters.command("antispam") & filters.group)
-@require_admin()
 @error_handler
+@require_admin()
 async def antispam_settings(client: Client, message: Message):
+    """View or modify anti-spam settings."""
     args = message.command[1:] if len(message.command) > 1 else []
     chat_id = message.chat.id
     
@@ -90,7 +137,7 @@ async def antispam_settings(client: Client, message: Message):
         
     elif setting in ["media", "sticker", "mentions"]:
         try:
-            limit = int(value) if value else 5
+            limit = int(value) if value else Limits.MAX_MENTIONS_DEFAULT
         except ValueError:
             return await message.reply_text("Please provide a valid number.")
         
@@ -102,10 +149,10 @@ async def antispam_settings(client: Client, message: Message):
 
 
 @Client.on_message(filters.command("swarn") & filters.group)
-@require_admin()
 @error_handler
+@require_admin()
 async def silent_warn(client: Client, message: Message):
-    """Silent warning - warns user via DM only"""
+    """Silent warning - warns user via DM only."""
     user = await extract_user(client, message)
     if not user:
         return await message.reply_text("Reply to a user or mention them to warn.")
@@ -128,7 +175,7 @@ async def silent_warn(client: Client, message: Message):
             user_id,
             f"You have been warned in **{message.chat.title}**.\n"
             f"Reason: {reason}\n"
-            f"Warning count: {count}/3"
+            f"Warning count: {count}/{Limits.MAX_WARNS}"
         )
         await message.reply_text("User has been warned via DM.", quote=False)
     except Exception:
@@ -137,20 +184,24 @@ async def silent_warn(client: Client, message: Message):
     await db.log_admin_action("silent_warn", message.from_user.id, message.chat.id, user_id, reason)
     
     # Check for max warns
-    if count >= 3:
+    if count >= Limits.MAX_WARNS:
         try:
             await client.ban_chat_member(message.chat.id, user_id)
-            await message.reply_text(f"{user_mention} has been banned (3/3 warns).")
+            await message.reply_text(f"{user_mention} has been banned ({Limits.MAX_WARNS}/{Limits.MAX_WARNS} warns).")
             await db.reset_warns(message.chat.id, user_id)
         except Exception:
             pass
 
 
+# =============================================================================
+# RAID MODE
+# =============================================================================
+
 @Client.on_message(filters.command("raid") & filters.group)
-@require_admin()
 @error_handler
+@require_admin()
 async def raid_mode(client: Client, message: Message):
-    """Anti-raid mode - restricts new joins temporarily"""
+    """Toggle anti-raid mode."""
     args = message.command[1:] if len(message.command) > 1 else []
     chat_id = message.chat.id
     
@@ -161,24 +212,21 @@ async def raid_mode(client: Client, message: Message):
     
     if action == "on":
         # Parse duration (default 1 hour)
-        duration = 3600  # 1 hour default
+        duration = Timeouts.RAID_DEFAULT_DURATION
         if len(args) > 1:
             try:
-                from zyrax.utils.time_parser import parse_duration
-                duration = parse_duration(args[1])
+                parsed = parse_duration(args[1])
+                if parsed:
+                    duration = parsed
             except Exception:
                 pass
         
         expire_time = time.time() + duration
         await db.set_raid_mode(chat_id, True, expire_time)
         
-        hours = duration // 3600
-        mins = (duration % 3600) // 60
-        duration_str = f"{hours}h {mins}m" if hours else f"{mins}m"
-        
         await message.reply_text(
             f"**Anti-Raid Mode Activated!**\n\n"
-            f"Duration: {duration_str}\n"
+            f"Duration: {format_raid_duration(duration)}\n"
             f"New members will be automatically muted until verified.\n"
             f"Use /raid off to disable."
         )
@@ -191,7 +239,7 @@ async def raid_mode(client: Client, message: Message):
 @Client.on_message(filters.command("raidstatus") & filters.group)
 @error_handler
 async def raid_status(client: Client, message: Message):
-    """Check anti-raid status"""
+    """Check anti-raid status."""
     status = await db.get_raid_mode(message.chat.id)
     
     if status.get("enabled") and status.get("expires", 0) > time.time():
@@ -203,11 +251,15 @@ async def raid_status(client: Client, message: Message):
         await message.reply_text("Anti-raid is **OFF**.")
 
 
+# =============================================================================
+# WHITELIST
+# =============================================================================
+
 @Client.on_message(filters.command("whitelist") & filters.group)
-@require_admin()
 @error_handler
+@require_admin()
 async def whitelist_handler(client: Client, message: Message):
-    """Manage link whitelist"""
+    """Manage link whitelist."""
     args = message.command[1:] if len(message.command) > 1 else []
     chat_id = message.chat.id
     
@@ -219,7 +271,7 @@ async def whitelist_handler(client: Client, message: Message):
     if action == "add":
         if len(args) < 2:
             return await message.reply_text("Usage: /whitelist add <domain>")
-        domain = args[1].lower().replace("http://", "").replace("https://", "").split("/")[0]
+        domain = extract_domain(args[1].lower())
         await db.add_whitelist_domain(chat_id, domain)
         await message.reply_text(f"Added `{domain}` to whitelist.")
         
@@ -238,20 +290,19 @@ async def whitelist_handler(client: Client, message: Message):
         await message.reply_text(text)
 
 
-# ===== MESSAGE HANDLERS FOR ANTISPAM =====
+# =============================================================================
+# MESSAGE HANDLERS
+# =============================================================================
 
 @Client.on_message(filters.text & filters.group, group=6)
 async def antispam_check(client: Client, message: Message):
-    """Check messages for spam patterns"""
+    """Check messages for spam patterns."""
     if not message.text or message.text.startswith("/"):
         return
     
-    try:
-        member = await message.chat.get_member(message.from_user.id)
-        if member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]:
-            return
-    except Exception:
-        pass
+    # Skip admins (cached check)
+    if await check_admin_status(message):
+        return
     
     chat_id = message.chat.id
     settings = await db.get_chat_settings(chat_id)
@@ -262,14 +313,14 @@ async def antispam_check(client: Client, message: Message):
     # === CAPS DETECTION ===
     if antispam.get("caps", False):
         alpha_chars = [c for c in text if c.isalpha()]
-        if len(alpha_chars) > 10:  # Only check if enough letters
+        if len(alpha_chars) >= Limits.MIN_CAPS_CHARS:
             caps_ratio = sum(1 for c in alpha_chars if c.isupper()) / len(alpha_chars)
-            if caps_ratio >= 0.7:
+            if caps_ratio >= Limits.CAPS_THRESHOLD:
                 try:
                     await message.delete()
-                    await message.reply_text(
-                        f"{message.from_user.mention}, please don't use excessive caps!",
-                        quote=False
+                    await client.send_message(
+                        chat_id,
+                        f"{message.from_user.mention}, please don't use excessive caps!"
                     )
                     return
                 except Exception:
@@ -277,7 +328,6 @@ async def antispam_check(client: Client, message: Message):
     
     # === LINK DETECTION ===
     if antispam.get("links", False):
-        # URL regex
         url_pattern = r'https?://[^\s]+'
         urls = re.findall(url_pattern, text.lower())
         
@@ -285,30 +335,19 @@ async def antispam_check(client: Client, message: Message):
             whitelist = await db.get_whitelist_domains(chat_id)
             
             for url in urls:
-                domain = url.replace("https://", "").replace("http://", "").split("/")[0]
+                domain = extract_domain(url)
                 
                 # Check whitelist
                 if any(w in domain for w in whitelist):
                     continue
                 
-                # Check for phishing
-                is_suspicious = False
-                for pattern in SUSPICIOUS_PATTERNS:
-                    if re.search(pattern, url):
-                        is_suspicious = True
-                        break
-                
-                for phish in PHISHING_DOMAINS:
-                    if phish in domain:
-                        is_suspicious = True
-                        break
-                
-                if is_suspicious or not whitelist:  # Block all links if no whitelist
+                # Check for suspicious URLs
+                if is_suspicious_url(url) or not whitelist:
                     try:
                         await message.delete()
-                        await message.reply_text(
-                            f"{message.from_user.mention}, external links are not allowed!",
-                            quote=False
+                        await client.send_message(
+                            chat_id,
+                            f"{message.from_user.mention}, external links are not allowed!"
                         )
                         return
                     except Exception:
@@ -321,9 +360,9 @@ async def antispam_check(client: Client, message: Message):
         if mentions > mention_limit:
             try:
                 await message.delete()
-                await message.reply_text(
-                    f"{message.from_user.mention}, too many mentions! Max: {mention_limit}",
-                    quote=False
+                await client.send_message(
+                    chat_id,
+                    f"{message.from_user.mention}, too many mentions! Max: {mention_limit}"
                 )
                 return
             except Exception:
@@ -332,67 +371,61 @@ async def antispam_check(client: Client, message: Message):
 
 @Client.on_message(filters.forwarded & filters.group, group=7)
 async def check_forwards(client: Client, message: Message):
-    """Block forwarded messages from channels"""
-    try:
-        member = await message.chat.get_member(message.from_user.id)
-        if member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]:
-            return
-    except Exception:
-        pass
+    """Block forwarded messages from channels."""
+    if await check_admin_status(message):
+        return
     
     settings = await db.get_chat_settings(message.chat.id)
     antispam = settings.get("antispam", {})
     
-    if antispam.get("forwards", False):
-        # Check if forwarded from a channel
-        if message.forward_from_chat:
-            try:
-                await message.delete()
-                await message.reply_text(
-                    f"{message.from_user.mention}, forwarding from channels is not allowed!",
-                    quote=False
-                )
-            except Exception:
-                pass
+    if antispam.get("forwards", False) and message.forward_from_chat:
+        try:
+            await message.delete()
+            await client.send_message(
+                message.chat.id,
+                f"{message.from_user.mention}, forwarding from channels is not allowed!"
+            )
+        except Exception:
+            pass
 
 
-@Client.on_message((filters.sticker | filters.animation | filters.photo | filters.video) & filters.group, group=8)
+@Client.on_message(
+    (filters.sticker | filters.animation | filters.photo | filters.video) & filters.group,
+    group=8
+)
 async def check_media_spam(client: Client, message: Message):
-    """Check for media/sticker spam"""
-    try:
-        member = await message.chat.get_member(message.from_user.id)
-        if member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]:
-            return
-    except Exception:
-        pass
+    """Check for media/sticker spam."""
+    if await check_admin_status(message):
+        return
     
     chat_id = message.chat.id
     user_id = message.from_user.id
     settings = await db.get_chat_settings(chat_id)
     antispam = settings.get("antispam", {})
     
-    # Determine media type
-    media_type = "media"
+    # Determine media type and limit
     if message.sticker:
         media_type = "sticker"
         limit = antispam.get("sticker_limit", 0)
     else:
+        media_type = "media"
         limit = antispam.get("media_limit", 0)
     
     if limit <= 0:
         return
     
-    # Track in Redis with sliding window (30 seconds)
+    # Track in Redis with sliding window
     cache_key = f"spam:{media_type}:{chat_id}:{user_id}"
-    count = await db.cache.incr_with_ttl(cache_key, ttl=30)
+    count = await db.cache.incr_with_ttl(cache_key, ttl=Limits.MEDIA_SPAM_WINDOW)
     
     if count > limit:
         try:
             await message.delete()
             if count == limit + 1:  # Only warn once
-                await message.reply_text(
-                    f"{message.from_user.mention}, slow down with the {media_type}s! Max: {limit}/30s",
-                    quote=False
+                await client.send_message(
+                    chat_id,
+                    f"{message.from_user.mention}, slow down with the {media_type}s! "
+                    f"Max: {limit}/{Limits.MEDIA_SPAM_WINDOW}s"
                 )
         except Exception:
             pass
@@ -400,7 +433,7 @@ async def check_media_spam(client: Client, message: Message):
 
 @Client.on_message(filters.new_chat_members & filters.group, group=9)
 async def raid_mode_handler(client: Client, message: Message):
-    """Handle new members during raid mode"""
+    """Handle new members during raid mode."""
     chat_id = message.chat.id
     status = await db.get_raid_mode(chat_id)
     
@@ -418,10 +451,10 @@ async def raid_mode_handler(client: Client, message: Message):
                 member.id,
                 ChatPermissions(can_send_messages=False)
             )
-            await message.reply_text(
+            await client.send_message(
+                chat_id,
                 f"**Anti-Raid Active**\n{member.mention}, you've been temporarily muted. "
-                f"Please wait for an admin to verify you.",
-                quote=False
+                f"Please wait for an admin to verify you."
             )
         except Exception:
             pass
