@@ -1,0 +1,41 @@
+services:
+  zyrax:
+    build: .
+    container_name: zyrax_bot
+    depends_on:
+      - mongo
+      - redis
+    env_file:
+      - .env
+    volumes:
+      - ./zyrax:/app/zyrax
+      - ./logs:/app/logs
+    restart: always
+    networks:
+      - zyrax_net
+
+  mongo:
+    image: mongo:latest
+    container_name: zyrax_mongo
+    volumes:
+      - mongo_data:/data/db
+    restart: always
+    networks:
+      - zyrax_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: zyrax_redis
+    volumes:
+      - redis_data:/data
+    restart: always
+    networks:
+      - zyrax_net
+
+networks:
+  zyrax_net:
+    driver: bridge
+
+volumes:
+  mongo_data:
+  redis_data:
