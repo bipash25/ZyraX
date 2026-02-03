@@ -1,10 +1,12 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from zyrax.utils.decorators import require_admin
+from zyrax.utils.errors import error_handler
 from zyrax.database.mongo import db
 from zyrax.utils.validators import InputValidator
-from zyrax.utils.formatting import format_text, parse_buttons
+from zyrax.utils.formatting import format_text, parse_buttons, extract_content, reply_media
 import re
+from datetime import datetime
 
 __mod_name__ = "Filters"
 __help__ = """
@@ -26,32 +28,8 @@ Use [Button Text](buttonurl://example.com) to add buttons
 {chatname} - Chat name
 """
 
-async def extract_content(message):
-    data = {}
-    if message.reply_to_message:
-        media_msg = message.reply_to_message
-        if media_msg.text:
-            data = {"type": "text", "content": media_msg.text}
-        else:
-            file_id = None
-            media_type = None
-            for attr in ["photo", "video", "audio", "voice", "document", "sticker", "animation"]:
-                val = getattr(media_msg, attr, None)
-                if val:
-                    file_id = val.file_id
-                    media_type = attr
-                    break
-            
-            if file_id:
-                data = {
-                    "type": "media",
-                    "media_type": media_type,
-                    "file_id": file_id,
-                    "caption": media_msg.caption or ""
-                }
-    return data
-
 @Client.on_message(filters.command("filter") & filters.group)
+@error_handler
 @require_admin()
 async def save_filter(client: Client, message: Message):
     if len(message.command) < 2:
@@ -95,6 +73,7 @@ async def save_filter(client: Client, message: Message):
     await message.reply_text(f"Saved {'regex ' if is_regex else ''}filter `{keyword}`.")
 
 @Client.on_message(filters.command("stop") & filters.group)
+@error_handler
 @require_admin()
 async def stop_filter(client: Client, message: Message):
     if len(message.command) < 2:
@@ -111,6 +90,7 @@ async def stop_filter(client: Client, message: Message):
         await message.reply_text("Filter not found.")
 
 @Client.on_message(filters.command("filters") & filters.group)
+@error_handler
 async def list_filters(client: Client, message: Message):
     filters_map = await db.get_chat_filters(message.chat.id)
     if not filters_map:
@@ -126,6 +106,7 @@ async def list_filters(client: Client, message: Message):
 
 
 @Client.on_message(filters.command("filterstats") & filters.group)
+@error_handler
 @require_admin()
 async def filter_stats(client: Client, message: Message):
     """Show filter hit statistics"""
@@ -136,7 +117,6 @@ async def filter_stats(client: Client, message: Message):
     
     text = "**Filter Statistics:**\n\n"
     for stat in stats[:15]:  # Top 15
-        from datetime import datetime
         last_hit = datetime.fromtimestamp(stat.get("last_hit", 0)).strftime("%m/%d %H:%M")
         text += f"- `{stat['filter']}`: {stat['hits']} hits (last: {last_hit})\n"
     
@@ -145,6 +125,7 @@ async def filter_stats(client: Client, message: Message):
 
 @Client.on_message(filters.group & filters.text & ~filters.command([]), group=1)
 async def filter_watcher(client: Client, message: Message):
+    """Watch for filter triggers in messages."""
     chat_filters = await db.get_chat_filters(message.chat.id)
     if not chat_filters:
         return
@@ -162,19 +143,19 @@ async def filter_watcher(client: Client, message: Message):
                     matched_keyword = keyword
                     match_data = data
                     break
-            except:
+            except re.error:
                 continue
         else:
-             if keyword in text_lower.split():
-                 matched_keyword = keyword
-                 match_data = data
-                 break
+            if keyword in text_lower.split():
+                matched_keyword = keyword
+                match_data = data
+                break
     
-    if match_data:
+    if match_data and matched_keyword:
         # Track filter stats
         await db.increment_filter_stats(message.chat.id, matched_keyword)
         
-        # Formatting
+        # Format content with variables
         content = match_data.get("content", "") or match_data.get("caption", "")
         formatted_content = await format_text(content, message.from_user, message.chat)
         text_final, markup = parse_buttons(formatted_content)
@@ -182,20 +163,4 @@ async def filter_watcher(client: Client, message: Message):
         if match_data["type"] == "text":
             await message.reply_text(text_final, reply_markup=markup)
         elif match_data["type"] == "media":
-            await send_cached_media(message, match_data, text_final, markup)
-
-async def send_cached_media(message, data, caption, markup):
-    if data["media_type"] == "photo":
-        await message.reply_photo(data["file_id"], caption=caption, reply_markup=markup)
-    elif data["media_type"] == "video":
-        await message.reply_video(data["file_id"], caption=caption, reply_markup=markup)
-    elif data["media_type"] == "document":
-        await message.reply_document(data["file_id"], caption=caption, reply_markup=markup)
-    elif data["media_type"] == "sticker":
-        await message.reply_sticker(data["file_id"], reply_markup=markup)
-    elif data["media_type"] == "audio":
-        await message.reply_audio(data["file_id"], caption=caption, reply_markup=markup)
-    elif data["media_type"] == "voice":
-        await message.reply_voice(data["file_id"], caption=caption, reply_markup=markup)
-    elif data["media_type"] == "animation":
-        await message.reply_animation(data["file_id"], caption=caption, reply_markup=markup)
+            await reply_media(message, match_data, text_final, markup)
