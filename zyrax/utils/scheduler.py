@@ -4,7 +4,9 @@ import aiohttp
 import feedparser
 from zyrax.database.mongo import db
 from zyrax.utils.logger import logger
+from zyrax.constants import Timeouts
 from pyrogram import Client
+from pyrogram.enums import ParseMode
 
 async def check_rss_feeds(client: Client):
     # Iterate all settings docs that have rss_feeds
@@ -66,7 +68,7 @@ async def check_reminders(client: Client):
                 reminder["chat_id"],
                 f"**Reminder for** <a href='tg://user?id={reminder['user_id']}'>User</a>\n\n"
                 f"{reminder['text']}",
-                parse_mode="HTML"
+                parse_mode=ParseMode.HTML
             )
         except Exception as e:
             logger.error(f"Failed to send reminder: {e}")
@@ -135,8 +137,26 @@ async def check_raid_mode(client: Client):
             pass
 
 
+async def cleanup_stale_games():
+    """Clean up old/abandoned games from memory."""
+    try:
+        from zyrax.modules.games.base import cleanup_all_games
+        results = cleanup_all_games(max_age=Timeouts.GAME_MAX_AGE)
+        
+        total_cleaned = sum(results.values())
+        if total_cleaned > 0:
+            logger.info(f"Cleaned up {total_cleaned} stale games: {results}")
+    except ImportError:
+        # Games module not loaded
+        pass
+    except Exception as e:
+        logger.error(f"Game cleanup error: {e}")
+
+
 async def scheduler_loop(client: Client):
     logger.info("Scheduler started.")
+    game_cleanup_counter = 0
+    
     while True:
         try:
             # Run all scheduled tasks
@@ -147,6 +167,12 @@ async def scheduler_loop(client: Client):
                 check_raid_mode(client),
                 return_exceptions=True
             )
+            
+            # Run game cleanup every 5 minutes (10 iterations * 30 seconds)
+            game_cleanup_counter += 1
+            if game_cleanup_counter >= 10:
+                await cleanup_stale_games()
+                game_cleanup_counter = 0
             
             # Sleep 30 seconds between checks
             await asyncio.sleep(30)
