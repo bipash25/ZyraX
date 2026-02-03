@@ -3,6 +3,7 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, 
 from zyrax.utils.decorators import require_admin
 from zyrax.utils.errors import error_handler
 from zyrax.database.mongo import db
+from zyrax.constants import Limits
 import random
 import asyncio
 import time
@@ -19,8 +20,8 @@ PENDING_CAPTCHAS = {}
 BACKGROUND_TASKS = set()
 
 @Client.on_message(filters.command("captcha") & filters.group)
-@require_admin()
 @error_handler
+@require_admin()
 async def set_captcha(client: Client, message: Message):
     if len(message.command) < 2:
         # Get current status
@@ -40,8 +41,8 @@ async def set_captcha(client: Client, message: Message):
         await message.reply_text("Usage: /captcha [on/off]")
 
 @Client.on_message(filters.command("captchamode") & filters.group)
-@require_admin()
 @error_handler
+@require_admin()
 async def set_captcha_mode(client: Client, message: Message):
     if len(message.command) < 2:
         return await message.reply_text("Usage: /captchamode [button/math]")
@@ -53,7 +54,8 @@ async def set_captcha_mode(client: Client, message: Message):
     await db.set_captcha(message.chat.id, mode=mode)
     await message.reply_text(f"Captcha mode set to: **{mode}**")
 
-@Client.on_message(filters.new_chat_members & filters.group, group=1) 
+@Client.on_message(filters.new_chat_members & filters.group, group=1)
+@error_handler
 async def captcha_handler(client: Client, message: Message):
     chat_id = message.chat.id
     settings = await db.get_captcha_settings(chat_id)
@@ -115,13 +117,14 @@ async def captcha_handler(client: Client, message: Message):
             "timestamp": time.time()
         }
         
-        # Auto kick task (60 seconds)
+        # Auto kick task
         task = asyncio.create_task(timeout_captcha(client, chat_id, member.id, msg.id))
         BACKGROUND_TASKS.add(task)
         task.add_done_callback(BACKGROUND_TASKS.discard)
 
 async def timeout_captcha(client, chat_id, user_id, msg_id):
-    await asyncio.sleep(60) # 60 seconds timeout
+    """Auto-kick user if captcha not solved within timeout."""
+    await asyncio.sleep(Limits.CAPTCHA_TIMEOUT)
     key = f"{user_id}_{chat_id}"
     if key in PENDING_CAPTCHAS:
         # Not verified yet

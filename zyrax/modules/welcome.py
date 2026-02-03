@@ -63,8 +63,8 @@ async def welcome(client: Client, message: Message):
             await message.reply_text(get_text("welcome", lang, chatname=message.chat.title, mention=member.mention))
 
 @Client.on_message(filters.command("welcomemode") & filters.group)
-@require_admin()
 @error_handler
+@require_admin()
 async def set_welcome_mode(client: Client, message: Message):
     if len(message.command) < 2:
         return await message.reply_text("Usage: /welcomemode <text|image>")
@@ -105,8 +105,8 @@ async def goodbye(client: Client, message: Message):
         await message.reply_text(get_text("goodbye", lang, first=member.first_name))
 
 @Client.on_message(filters.command("setwelcome") & filters.group)
-@require_admin()
 @error_handler
+@require_admin()
 async def set_welcome(client: Client, message: Message):
     lang = await db.get_chat_language(message.chat.id)
     
@@ -122,15 +122,15 @@ async def set_welcome(client: Client, message: Message):
     await message.reply_text(get_text("success", lang))
 
 @Client.on_message(filters.command("delwelcome") & filters.group)
-@require_admin()
 @error_handler
+@require_admin()
 async def del_welcome(client: Client, message: Message):
     await db.delete_welcome(message.chat.id)
     await message.reply_text("Welcome message deleted (reset to default).")
 
 @Client.on_message(filters.command("setgoodbye") & filters.group)
-@require_admin()
 @error_handler
+@require_admin()
 async def set_goodbye(client: Client, message: Message):
     if len(message.command) < 2 and not message.reply_to_message:
         return await message.reply_text("Usage: /setgoodbye <text> or reply to a message")
@@ -144,8 +144,8 @@ async def set_goodbye(client: Client, message: Message):
     await message.reply_text("Goodbye message set!")
 
 @Client.on_message(filters.command("delgoodbye") & filters.group)
-@require_admin()
 @error_handler
+@require_admin()
 async def del_goodbye(client: Client, message: Message):
     await db.delete_goodbye(message.chat.id)
     await message.reply_text("Goodbye message deleted (reset to default).")
@@ -172,8 +172,8 @@ async def get_rules(client: Client, message: Message):
         await message.reply_text(f"**Rules for {message.chat.title}:**\n\n{rules}")
 
 @Client.on_message(filters.command("setrules") & filters.group)
-@require_admin()
 @error_handler
+@require_admin()
 async def set_rules(client: Client, message: Message):
     lang = await db.get_chat_language(message.chat.id)
     
@@ -189,8 +189,8 @@ async def set_rules(client: Client, message: Message):
     await message.reply_text(get_text("rules_set", lang))
 
 @Client.on_message(filters.command("clearrules") & filters.group)
-@require_admin()
 @error_handler
+@require_admin()
 async def clear_rules(client: Client, message: Message):
     await db.set_rules(message.chat.id, rules=None)
     await message.reply_text("Rules cleared!")
