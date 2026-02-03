@@ -192,14 +192,14 @@ class DatabaseConnection:
         }
         
         try:
-            if self._database:
+            if self._database is not None:
                 await self._database.command('ping')
                 status["mongodb"] = True
         except Exception as e:
             logger.error(f"MongoDB health check failed: {e}")
         
         try:
-            if self._redis:
+            if self._redis is not None:
                 await self._redis.ping()
                 status["redis"] = True
         except Exception as e:
