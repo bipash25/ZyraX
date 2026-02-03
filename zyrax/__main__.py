@@ -18,6 +18,7 @@ from zyrax.constants import Limits, Timeouts
 from zyrax.modules import load_modules, get_load_stats
 from zyrax.utils.logger import logger
 from zyrax.dashboard import app as dashboard_app
+from zyrax import __version__
 
 
 # Global state for graceful shutdown
@@ -136,7 +137,7 @@ async def main() -> None:
     
     # Print startup banner
     logger.info("=" * 50)
-    logger.info("ZyraX Bot Starting...")
+    logger.info(f"ZyraX Bot v{__version__} Starting...")
     logger.info("=" * 50)
     
     # Validate configuration
