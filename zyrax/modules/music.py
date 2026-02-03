@@ -1,12 +1,25 @@
+"""
+ZyraX Music Module
+
+Voice chat music playback with queue management and radio streams.
+"""
+
 import os
 import asyncio
+import time
+from typing import Dict, List, Optional, Any
+
 import aiohttp
+import yt_dlp
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from pytgcalls import PyTgCalls
 from pytgcalls.types import MediaStream
+
 from zyrax.utils.errors import error_handler
-import yt_dlp
+from zyrax.utils.ratelimit import rate_limit
+from zyrax.constants import Limits, RADIO_STATIONS
+
 
 __mod_name__ = "Music"
 __help__ = """
@@ -32,26 +45,53 @@ __help__ = """
 /lyrics <song> - Search for lyrics
 """
 
-# Queue: {chat_id: [{"title": ..., "file": ..., "duration": ...}]}
-QUEUES = {}
-NOW_PLAYING = {}  # {chat_id: {"title": ..., "started": timestamp}}
 
-def get_audio_url(query):
+# =============================================================================
+# CONSTANTS
+# =============================================================================
+
+DOWNLOADS_DIR = "zyrax/downloads"
+MAX_LYRICS_LENGTH = 4000
+QUEUE_DISPLAY_LIMIT = 10
+
+
+# =============================================================================
+# STATE
+# =============================================================================
+
+# Queue: {chat_id: [{"title": ..., "file": ..., "duration": ...}]}
+QUEUES: Dict[int, List[Dict[str, Any]]] = {}
+
+# Now playing: {chat_id: {"title": ..., "started": timestamp}}
+NOW_PLAYING: Dict[int, Dict[str, Any]] = {}
+
+# Radio playing: {chat_id: station_key}
+RADIO_PLAYING: Dict[int, str] = {}
+
+
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
+
+def get_audio_url(query: str) -> Optional[Dict[str, Any]]:
+    """Download audio from YouTube and return track info."""
     ydl_opts = {
         'format': 'bestaudio/best',
         'quiet': True,
         'noplaylist': True,
-        'outtmpl': 'zyrax/downloads/%(id)s.%(ext)s',
+        'outtmpl': f'{DOWNLOADS_DIR}/%(id)s.%(ext)s',
     }
     
-    # Ensure downloads directory exists
-    os.makedirs('zyrax/downloads', exist_ok=True)
+    os.makedirs(DOWNLOADS_DIR, exist_ok=True)
     
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         try:
-            info = ydl.extract_info(f"ytsearch:{query}" if not query.startswith("http") else query, download=True)
+            search_query = query if query.startswith("http") else f"ytsearch:{query}"
+            info = ydl.extract_info(search_query, download=True)
+            
             if 'entries' in info:
                 info = info['entries'][0]
+                
             return {
                 "file": ydl.prepare_filename(info),
                 "title": info.get("title", "Unknown"),
@@ -59,10 +99,12 @@ def get_audio_url(query):
                 "thumbnail": info.get("thumbnail", ""),
                 "channel": info.get("channel", "Unknown")
             }
-        except Exception as e:
+        except Exception:
             return None
 
-def format_duration(seconds):
+
+def format_duration(seconds: Optional[int]) -> str:
+    """Format seconds as MM:SS or HH:MM:SS."""
     if not seconds:
         return "Unknown"
     mins, secs = divmod(int(seconds), 60)
@@ -71,22 +113,58 @@ def format_duration(seconds):
         return f"{hours}:{mins:02d}:{secs:02d}"
     return f"{mins}:{secs:02d}"
 
+
+def cleanup_track_file(track: Dict[str, Any]) -> None:
+    """Remove downloaded file for a track."""
+    file_path = track.get("file", "")
+    if file_path and os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+        except OSError:
+            pass
+
+
+def cleanup_queue(chat_id: int) -> None:
+    """Clean up all tracks in a queue."""
+    if chat_id in QUEUES:
+        for track in QUEUES[chat_id]:
+            cleanup_track_file(track)
+        del QUEUES[chat_id]
+    
+    if chat_id in NOW_PLAYING:
+        del NOW_PLAYING[chat_id]
+
+
+# =============================================================================
+# PLAYBACK COMMANDS
+# =============================================================================
+
 @Client.on_message(filters.command("play") & filters.group)
+@rate_limit(max_attempts=5, window=60)
 @error_handler
 async def play(client: Client, message: Message):
+    """Play a song from YouTube."""
     if len(message.command) < 2:
         return await message.reply_text("Usage: /play <query/url>")
     
+    chat_id = message.chat.id
+    
+    # Check queue size limit
+    if chat_id in QUEUES and len(QUEUES[chat_id]) >= Limits.MAX_QUEUE_SIZE:
+        return await message.reply_text(
+            f"Queue is full ({Limits.MAX_QUEUE_SIZE} tracks max). "
+            "Remove some tracks or clear the queue."
+        )
+    
     query = " ".join(message.command[1:])
-    m = await message.reply_text("Searching...")
+    msg = await message.reply_text("Searching...")
     
     loop = asyncio.get_running_loop()
     track_info = await loop.run_in_executor(None, get_audio_url, query)
     
     if not track_info:
-        return await m.edit_text("No results found or download failed.")
-        
-    chat_id = message.chat.id
+        return await msg.edit_text("No results found or download failed.")
+    
     track_info["requester"] = message.from_user.first_name
     
     if chat_id not in QUEUES:
@@ -94,21 +172,25 @@ async def play(client: Client, message: Message):
     
     QUEUES[chat_id].append(track_info)
     
-    call_client: PyTgCalls = client.call_client
-    
     if len(QUEUES[chat_id]) == 1:
-        await start_playback(client, chat_id, track_info, m)
+        await start_playback(client, chat_id, track_info, msg)
     else:
         pos = len(QUEUES[chat_id])
-        await m.edit_text(
+        await msg.edit_text(
             f"**Added to Queue** (#{pos})\n\n"
             f"**Title:** {track_info['title']}\n"
             f"**Duration:** {format_duration(track_info['duration'])}\n"
             f"**Requested by:** {track_info['requester']}"
         )
 
-async def start_playback(client, chat_id, track, message_obj=None):
-    import time
+
+async def start_playback(
+    client: Client,
+    chat_id: int,
+    track: Dict[str, Any],
+    message_obj: Optional[Message] = None
+) -> None:
+    """Start playing a track in voice chat."""
     call_client: PyTgCalls = client.call_client
     
     try:
@@ -139,72 +221,81 @@ async def start_playback(client, chat_id, track, message_obj=None):
     except Exception as e:
         if message_obj:
             await message_obj.edit_text(f"Error playing: {e}")
+        # Remove failed track from queue
         if chat_id in QUEUES and QUEUES[chat_id]:
             QUEUES[chat_id].pop(0)
 
+
 @Client.on_message(filters.command("stop") & filters.group)
+@error_handler
 async def stop(client: Client, message: Message):
+    """Stop playback and leave voice chat."""
     chat_id = message.chat.id
     call_client: PyTgCalls = client.call_client
     
     try:
         await call_client.leave_call(chat_id)
-        if chat_id in QUEUES:
-            for track in QUEUES[chat_id]:
-                if os.path.exists(track["file"]):
-                    try: os.remove(track["file"])
-                    except: pass
-            del QUEUES[chat_id]
-        
-        if chat_id in NOW_PLAYING:
-            del NOW_PLAYING[chat_id]
-            
+        cleanup_queue(chat_id)
         await message.reply_text("Stopped playback.")
     except Exception as e:
         await message.reply_text(f"Error: {e}")
 
+
 @Client.on_message(filters.command("pause") & filters.group)
+@error_handler
 async def pause(client: Client, message: Message):
+    """Pause current playback."""
     call_client: PyTgCalls = client.call_client
     try:
         await call_client.pause_stream(message.chat.id)
         await message.reply_text("Paused.")
-    except:
+    except Exception:
         await message.reply_text("Nothing playing.")
 
+
 @Client.on_message(filters.command("resume") & filters.group)
+@error_handler
 async def resume(client: Client, message: Message):
+    """Resume paused playback."""
     call_client: PyTgCalls = client.call_client
     try:
         await call_client.resume_stream(message.chat.id)
         await message.reply_text("Resumed.")
-    except:
+    except Exception:
         await message.reply_text("Nothing paused.")
 
+
 @Client.on_message(filters.command("skip") & filters.group)
+@error_handler
 async def skip(client: Client, message: Message):
+    """Skip to the next track in queue."""
     chat_id = message.chat.id
+    
     if chat_id not in QUEUES or not QUEUES[chat_id]:
         return await message.reply_text("Queue is empty.")
     
     old_track = QUEUES[chat_id].pop(0)
-    if os.path.exists(old_track["file"]):
-        try: os.remove(old_track["file"])
-        except: pass
-        
+    cleanup_track_file(old_track)
+    
     if not QUEUES[chat_id]:
         await client.call_client.leave_call(chat_id)
         if chat_id in NOW_PLAYING:
             del NOW_PLAYING[chat_id]
         return await message.reply_text("Skipped. Queue is empty.")
-        
+    
     next_track = QUEUES[chat_id][0]
     await message.reply_text(f"Skipped. Next: **{next_track['title']}**")
     await start_playback(client, chat_id, next_track)
 
 
+# =============================================================================
+# QUEUE COMMANDS
+# =============================================================================
+
 @Client.on_message(filters.command("queue") & filters.group)
+@error_handler
 async def show_queue(client: Client, message: Message):
+    """Show the current queue."""
     chat_id = message.chat.id
     
     if chat_id not in QUEUES or not QUEUES[chat_id]:
@@ -213,26 +304,26 @@ async def show_queue(client: Client, message: Message):
     queue = QUEUES[chat_id]
     text = "**Queue:**\n\n"
     
-    for i, track in enumerate(queue, 1):
+    for i, track in enumerate(queue[:QUEUE_DISPLAY_LIMIT], 1):
         status = "Now" if i == 1 else str(i)
         text += f"**{status}.** {track['title']} ({format_duration(track['duration'])})\n"
-        if i >= 10:
-            remaining = len(queue) - 10
-            if remaining > 0:
-                text += f"\n... and {remaining} more"
-            break
+    
+    remaining = len(queue) - QUEUE_DISPLAY_LIMIT
+    if remaining > 0:
+        text += f"\n... and {remaining} more"
     
     await message.reply_text(text)
 
 
 @Client.on_message(filters.command("nowplaying") & filters.group)
+@error_handler
 async def now_playing(client: Client, message: Message):
+    """Show currently playing track."""
     chat_id = message.chat.id
     
     if chat_id not in NOW_PLAYING:
         return await message.reply_text("Nothing is currently playing.")
     
-    import time
     info = NOW_PLAYING[chat_id]
     elapsed = int(time.time() - info["started"])
     
@@ -247,7 +338,9 @@ async def now_playing(client: Client, message: Message):
 
 
 @Client.on_message(filters.command("remove") & filters.group)
+@error_handler
 async def remove_from_queue(client: Client, message: Message):
+    """Remove a track from the queue by position."""
     chat_id = message.chat.id
     
     if len(message.command) < 2:
@@ -259,18 +352,20 @@ async def remove_from_queue(client: Client, message: Message):
         return await message.reply_text("Invalid position.")
     
     if chat_id not in QUEUES or pos < 2 or pos > len(QUEUES[chat_id]):
-        return await message.reply_text("Invalid position. Cannot remove currently playing track.")
+        return await message.reply_text(
+            "Invalid position. Cannot remove currently playing track."
+        )
     
     removed = QUEUES[chat_id].pop(pos - 1)
-    if os.path.exists(removed["file"]):
-        try: os.remove(removed["file"])
-        except: pass
+    cleanup_track_file(removed)
     
     await message.reply_text(f"Removed: **{removed['title']}**")
 
 
-@Client.on_message(filters.command("clear") & filters.group)
+@Client.on_message(filters.command("clearqueue") & filters.group)
+@error_handler
 async def clear_queue(client: Client, message: Message):
+    """Clear the queue (keep current track)."""
     chat_id = message.chat.id
     
     if chat_id not in QUEUES or len(QUEUES[chat_id]) <= 1:
@@ -280,30 +375,32 @@ async def clear_queue(client: Client, message: Message):
     current = QUEUES[chat_id][0] if QUEUES[chat_id] else None
     
     for track in QUEUES[chat_id][1:]:
-        if os.path.exists(track["file"]):
-            try: os.remove(track["file"])
-            except: pass
+        cleanup_track_file(track)
     
     QUEUES[chat_id] = [current] if current else []
     await message.reply_text("Queue cleared.")
 
 
+# =============================================================================
+# LYRICS
+# =============================================================================
+
 @Client.on_message(filters.command("lyrics"))
+@rate_limit(max_attempts=5, window=60)
 @error_handler
 async def lyrics_search(client: Client, message: Message):
+    """Search for song lyrics."""
     if len(message.command) < 2:
         return await message.reply_text("Usage: /lyrics <song name>")
     
     query = " ".join(message.command[1:])
-    m = await message.reply_text("Searching for lyrics...")
+    msg = await message.reply_text("Searching for lyrics...")
     
-    # Use lyrics.ovh API (free, no auth)
     try:
-        # First try to parse "Artist - Song" format
+        # Parse "Artist - Song" format
         if " - " in query:
             artist, song = query.split(" - ", 1)
         else:
-            # Use the query as song name with empty artist
             artist = ""
             song = query
         
@@ -315,68 +412,27 @@ async def lyrics_search(client: Client, message: Message):
                     lyrics = data.get("lyrics", "")
                     
                     if lyrics:
-                        # Truncate if too long
-                        if len(lyrics) > 4000:
-                            lyrics = lyrics[:4000] + "\n\n... (truncated)"
+                        if len(lyrics) > MAX_LYRICS_LENGTH:
+                            lyrics = lyrics[:MAX_LYRICS_LENGTH] + "\n\n... (truncated)"
                         
-                        await m.edit_text(f"**Lyrics for:** {query}\n\n{lyrics}")
+                        await msg.edit_text(f"**Lyrics for:** {query}\n\n{lyrics}")
                     else:
-                        await m.edit_text("No lyrics found.")
+                        await msg.edit_text("No lyrics found.")
                 else:
-                    await m.edit_text("Lyrics not found. Try: /lyrics Artist - Song")
+                    await msg.edit_text("Lyrics not found. Try: /lyrics Artist - Song")
+                    
     except Exception as e:
-        await m.edit_text(f"Error searching lyrics: {e}")
+        await msg.edit_text(f"Error searching lyrics: {e}")
 
 
-# ===== RADIO STREAMS =====
-RADIO_STATIONS = {
-    "lofi": {
-        "name": "Lofi Hip Hop",
-        "url": "https://streams.ilovemusic.de/iloveradio17.mp3",
-        "genre": "Chill"
-    },
-    "jazz": {
-        "name": "Smooth Jazz",
-        "url": "https://strw3.openstream.co/654?aw_0_1st.collession=default",
-        "genre": "Jazz"
-    },
-    "classical": {
-        "name": "Classical Radio",
-        "url": "https://live.musopen.org:8085/streamvbr0",
-        "genre": "Classical"
-    },
-    "pop": {
-        "name": "Pop Hits",
-        "url": "https://streams.ilovemusic.de/iloveradio1.mp3",
-        "genre": "Pop"
-    },
-    "rock": {
-        "name": "Rock Radio",
-        "url": "https://streams.ilovemusic.de/iloveradio16.mp3",
-        "genre": "Rock"
-    },
-    "electronic": {
-        "name": "Electronic Beats",
-        "url": "https://streams.ilovemusic.de/iloveradio2.mp3",
-        "genre": "Electronic"
-    },
-    "hiphop": {
-        "name": "Hip Hop Hits",
-        "url": "https://streams.ilovemusic.de/iloveradio3.mp3",
-        "genre": "Hip Hop"
-    },
-    "ambient": {
-        "name": "Ambient Chill",
-        "url": "https://ice2.somafm.com/dronezone-128-mp3",
-        "genre": "Ambient"
-    }
-}
-
-RADIO_PLAYING = {}  # {chat_id: station_key}
-
+# =============================================================================
+# RADIO STREAMS
+# =============================================================================
 
 @Client.on_message(filters.command("stations") & filters.group)
+@error_handler
 async def list_stations(client: Client, message: Message):
+    """List available radio stations."""
     text = "**Available Radio Stations:**\n\n"
     
     for key, station in RADIO_STATIONS.items():
@@ -390,6 +446,7 @@ async def list_stations(client: Client, message: Message):
 @Client.on_message(filters.command("radio") & filters.group)
 @error_handler
 async def radio_play(client: Client, message: Message):
+    """Play a radio station."""
     if len(message.command) < 2:
         return await message.reply_text(
             "Usage: /radio <station>\n"
@@ -407,23 +464,13 @@ async def radio_play(client: Client, message: Message):
     station = RADIO_STATIONS[station_key]
     chat_id = message.chat.id
     
-    m = await message.reply_text(f"Connecting to **{station['name']}**...")
+    msg = await message.reply_text(f"Connecting to **{station['name']}**...")
     
     call_client: PyTgCalls = client.call_client
     
     try:
-        # Stop any current playback
-        if chat_id in QUEUES:
-            for track in QUEUES[chat_id]:
-                if os.path.exists(track.get("file", "")):
-                    try:
-                        os.remove(track["file"])
-                    except:
-                        pass
-            del QUEUES[chat_id]
-        
-        if chat_id in NOW_PLAYING:
-            del NOW_PLAYING[chat_id]
+        # Clean up any existing playback
+        cleanup_queue(chat_id)
         
         # Start radio stream
         await call_client.play(
@@ -433,7 +480,7 @@ async def radio_play(client: Client, message: Message):
         
         RADIO_PLAYING[chat_id] = station_key
         
-        await m.edit_text(
+        await msg.edit_text(
             f"**Now Playing Radio**\n\n"
             f"Station: **{station['name']}**\n"
             f"Genre: {station['genre']}\n\n"
@@ -441,11 +488,13 @@ async def radio_play(client: Client, message: Message):
         )
         
     except Exception as e:
-        await m.edit_text(f"Error starting radio: {e}")
+        await msg.edit_text(f"Error starting radio: {e}")
 
 
 @Client.on_message(filters.command("stopradio") & filters.group)
+@error_handler
 async def stop_radio(client: Client, message: Message):
+    """Stop radio playback."""
     chat_id = message.chat.id
     
     if chat_id not in RADIO_PLAYING:
