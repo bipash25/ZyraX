@@ -14,7 +14,7 @@ python-multipart
 aiofiles
 Pillow
 yt-dlp
-google-generativeai
+google-genai
 py-tgcalls
 feedparser
 qrcode[pil]

@@ -8,7 +8,7 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, 
 from zyrax.utils.errors import error_handler
 from zyrax.config import Config
 from zyrax.database.mongo import db
-import google.generativeai as genai
+from google import genai
 import random
 import asyncio
 from functools import partial
@@ -153,12 +153,12 @@ def translate_gemini(text: str, target_lang: str):
         
     try:
         api_key = random.choice(Config.GEMINI_API_KEYS)
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-pro')
+        client = genai.Client(api_key=api_key)
+        # Using genai client
         
         prompt = f"Translate the following text to {target_lang}. Only provide the translation, no extra text. Text: \"{text}\""
         
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
         return response.text.strip()
     except Exception as e:
         return f"Translation Error: {e}"

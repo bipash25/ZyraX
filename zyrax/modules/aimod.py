@@ -5,7 +5,7 @@ from zyrax.utils.decorators import require_admin
 from zyrax.utils.errors import error_handler
 from zyrax.database.mongo import db
 from zyrax.config import Config
-import google.generativeai as genai
+from google import genai
 import random
 import asyncio
 from functools import partial
@@ -39,8 +39,8 @@ def analyze_content_sync(text: str, sensitivity: str = "medium"):
     
     try:
         api_key = random.choice(Config.GEMINI_API_KEYS)
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-pro')
+        client = genai.Client(api_key=api_key)
+        # Using genai client
         
         sensitivity_desc = SENSITIVITY_PROMPTS.get(sensitivity, SENSITIVITY_PROMPTS["medium"])
         
@@ -53,7 +53,7 @@ Respond in EXACTLY this JSON format (no markdown, just raw JSON):
 
 Only respond with the JSON, nothing else."""
 
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
         result_text = response.text.strip()
         
         # Parse JSON response

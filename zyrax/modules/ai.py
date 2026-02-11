@@ -11,7 +11,8 @@ from functools import partial
 from typing import Optional
 
 import aiohttp
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from pyrogram import Client, filters
 from pyrogram.types import Message
 
@@ -38,7 +39,7 @@ __help__ = """
 
 MAX_DOCUMENT_CHARS = 30000
 DEFAULT_IMAGE_SIZE = "1024x1024"
-GEMINI_MODEL = "gemini-pro"
+GEMINI_MODEL = "gemini-2.5-flash"
 
 
 # =============================================================================
@@ -55,10 +56,12 @@ def _call_gemini(question: str) -> Optional[str]:
         return None
     
     api_key = random.choice(Config.GEMINI_API_KEYS)
-    genai.configure(api_key=api_key)
+    client = genai.Client(api_key=api_key)
     
-    model = genai.GenerativeModel(GEMINI_MODEL)
-    response = model.generate_content(question)
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=question
+    )
     return response.text
 
 

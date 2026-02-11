@@ -4,7 +4,7 @@ from zyrax.config import Config
 from zyrax.database.mongo import db
 import aiohttp
 import time
-import google.generativeai as genai
+from google import genai
 import random
 import asyncio
 from functools import partial
@@ -55,13 +55,13 @@ def _check_toxicity_gemini(text: str):
     
     try:
         api_key = random.choice(Config.GEMINI_API_KEYS)
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-pro')
+        client = genai.Client(api_key=api_key)
+        # Using genai client
         
         # Prompt for moderation
         prompt = f"Analyze the following text for toxicity, hate speech, or explicit content. Reply with 'YES' if it violates safety standards, or 'NO' if it is safe. Text: \"{text}\""
         
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
         answer = response.text.strip().upper().replace(".", "")
         return "YES" in answer
     except:

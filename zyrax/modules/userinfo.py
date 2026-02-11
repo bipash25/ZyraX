@@ -11,7 +11,7 @@ __help__ = """
 /id - Get current chat ID and your user ID
 """
 
-@Client.on_message(filters.command("info") & filters.group)
+@Client.on_message(filters.command("info"))
 @error_handler
 async def get_user_info(client: Client, message: Message):
     user = None
